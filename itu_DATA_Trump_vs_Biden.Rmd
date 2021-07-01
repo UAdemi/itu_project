@@ -1,5 +1,8 @@
 ---
 title: "ITU Project"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r Twitter Social Media Analytics - Trump vs. Biden Project}
@@ -30,11 +33,11 @@ install.packages("tibbletime")
 ```{r Importing Data}
 
 #Import Data from CSV
-biden_tw <- read.csv("~/Desktop/İTÜ Big Data Grup /Bitirme Projesi /archive/JoeBidenTweets.csv", stringsAsFactors = FALSE)
+biden_tw <- read.csv("./archive/JoeBidenTweets.csv", stringsAsFactors = FALSE)
 View(biden_tw)
 
-trump_tw <- read.csv("~/Desktop/İTÜ Big Data Grup /Bitirme Projesi /archive/realdonaldtrump.csv", stringsAsFactors = FALSE)
-trump_tw1 <- read.csv("~/Desktop/İTÜ Big Data Grup /Bitirme Projesi /archive/trumptweets.csv", stringsAsFactors = FALSE)
+trump_tw <- read.csv("./archive/realdonaldtrump.csv", stringsAsFactors = FALSE)
+trump_tw1 <- read.csv("./archive/trumptweets.csv", stringsAsFactors = FALSE)
 ```
 
 ```{r Cleaning Data}
@@ -66,7 +69,7 @@ clean_corpus <- function(corpus){
 }
 
 biden_corpuscl <- clean_corpus(biden_corpus)
-biden_corpuscl[[39]][1]
+biden_corpuscl[[35]][1]
 
 # Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
 
@@ -129,14 +132,15 @@ trump_corpus[[45]][1]
 trump_corpuscl <- clean_corpus(trump_corpus)
 
 trump_corpuscl[[90]][1]
+View(trump_corpuscl)
 
 # Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
-trump_tdm <- TermDocumentMatrix(trump_corpuscl)
+trump_tdm <- TermDocumentMatrix(trump_corpuscl[1:10])
 View(trump_tdm)
 dim(trump_tdm)
 
 
-# Convert coffee_tdm to a matrix
+# Convert trump_tdm to a matrix
 trump_m <- as.matrix(trump_tdm)
 View(trump_tdm)
 ```
@@ -208,7 +212,7 @@ as_tibble(rownames = "word") %>%
 # Keep rows where word appears everywhere
 filter_all(all_vars(. > 0)) %>% 
 # Get difference in counts
-mutate(difference = biden - trum) %>%
+mutate(difference = Biden - Trump) %>%
 # Keep rows with biggest difference
 top_n(25, wt = difference) %>% 
 # Arrange by descending difference
@@ -220,9 +224,10 @@ View(top25_df)
 
 pyramid.plot(
 # Chardonnay counts
-  top25_df$chardonnay,
+  top25_df$Biden,
 # Coffee counts
-  top25_df$coffee,
+  top25_df$Trump,
+  # gap = 1,
 # Words
   labels = top25_df$word,
   top.labels = c("Biden", "Words", "Trump"),
@@ -237,20 +242,19 @@ pyramid.plot(
 
 # Word Networks =================================================
 
+# Add “donald” and “president” to the list: new_stops
+new_stops <- c("donald", "my", "along", "and", "president", stopwords("en"))
+
+# Remove stop words from text
+biden_tweets_nt <- removeWords(biden_tweets, new_stops)
+
+
 # Word association
-word_associate(biden_tweets, match.string = "Trump", 
+word_associate(biden_tweets_nt[1:1000], match.string = "Trump", 
                network.plot = TRUE, cloud.colors = c("gray85", "darkred"))
 
 # Add title
 title(main = "Trump in Biden Tweet Associations")
 
-# END CODE ==================================================================================================
 ```
-
-
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
 
