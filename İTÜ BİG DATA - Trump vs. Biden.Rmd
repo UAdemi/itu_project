@@ -1,0 +1,251 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r Twitter Social Media Analytics - Trump vs. Biden Project}
+```
+
+
+```{r Packages}
+library(tm)
+library(qdap)
+library(wordcloud)
+library(viridisLite)
+library(plotrix)
+library(qdap)
+library(tidyverse)
+library(tidytext)
+library(magrittr)
+library(metricsgraphics)
+library(ggthemes)
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r Importing Data}
+
+#Import Data from CSV
+biden_tw <- read.csv("~/Desktop/İTÜ Big Data Grup /Bitirme Projesi /archive/JoeBidenTweets.csv", stringsAsFactors = FALSE)
+View(biden_tw)
+
+trump_tw <- read.csv("~/Desktop/İTÜ Big Data Grup /Bitirme Projesi /archive/realdonaldtrump.csv", stringsAsFactors = FALSE)
+trump_tw1 <- read.csv("~/Desktop/İTÜ Big Data Grup /Bitirme Projesi /archive/trumptweets.csv", stringsAsFactors = FALSE)
+```
+
+```{r Cleaning Data}
+# Isolate text from tweets
+biden_tweets <- biden_tw$tweet
+biden_tweets
+
+# Make a vector source from biden_tweets
+biden_source <- VectorSource(biden_tweets)
+
+# Make a volatile corpus: biden_corpus
+biden_corpus <- VCorpus(biden_source)
+biden_corpus[[35]][1]
+
+
+#We define a cleaning function
+clean_corpus <- function(corpus){
+  corpus <- tm_map(corpus, content_transformer(replace_abbreviation))
+  corpus <- tm_map(corpus, removeNumbers)
+  corpus <- tm_map(corpus, content_transformer(strip), char.keep="#")
+  corpus <- tm_map(corpus, removeWords, c(stopwords("en")))
+  corpus <- tm_map(corpus, content_transformer(tolower))
+  corpus <- tm_map(corpus, stripWhitespace)
+  return(corpus)
+}
+
+biden_corpuscl <- clean_corpus(biden_corpus)
+biden_corpuscl[[39]][1]
+
+# Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
+
+biden_tdm <- TermDocumentMatrix(biden_corpuscl)
+View(biden_tdm)
+dim(biden_tdm)
+
+
+# Convert biden_tdm to a matrix
+biden_m <- as.matrix(biden_tdm)
+biden_m
+
+```
+
+```{r Descriptive Analysis}
+# Calculate the row sums of biden_m
+term_frequency <- rowSums(biden_m)
+View(term_frequency)
+
+# Sort term_frequency in decreasing order
+term_frequency <- sort(term_frequency, decreasing = TRUE)
+View(term_frequency)
+
+# View the top 10 most common words
+term_frequency[1:10]
+
+# Plot a barchart of the 10 most common words
+barplot(term_frequency[1:10], col = "tan", las = 2)
+
+```
+
+
+```{r Word Cloud}
+# Vector of terms
+terms_vec <- names(term_frequency)
+View(terms_vec)
+
+# Create a wordcloud for the values in word_freqs
+wordcloud(terms_vec, term_frequency, 
+          max.words = 50, colors = "red")
+```
+
+
+```{r Other Clouds and Networks}
+View(trump_tw)
+
+# Isolate chardonnay text from tweets
+trump_tweets <- trump_tw$content
+View(trump_tweets)
+
+# Make a vector source from chardonnay_tweets
+trump_source <- VectorSource(trump_tweets)
+
+# Make a volatile corpus: chardonnay_corpus
+trump_corpus <- VCorpus(trump_source)
+trump_corpus[[45]][1]
+
+trump_corpuscl <- clean_corpus(trump_corpus)
+
+trump_corpuscl[[90]][1]
+
+# Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
+trump_tdm <- TermDocumentMatrix(trump_corpuscl)
+View(trump_tdm)
+dim(trump_tdm)
+
+
+# Convert coffee_tdm to a matrix
+trump_m <- as.matrix(trump_tdm)
+View(trump_tdm)
+```
+
+
+```{r Other Clouds and Networks - 2}
+
+
+# Analyzing Common Words btw Trump & Biden with commonality cloud =================================================
+# Create all_coffee
+all_trump <- paste(trump_tweets, collapse = " ")
+
+# Create all_chardonnay
+all_biden <- paste(biden_tweets, collapse = " ")
+
+# Create all_tweets
+all_tweets <- c(all_trump, all_biden)
+View(all_tweets)
+
+# Convert to a vector source
+all_tweets <- VectorSource(all_tweets)
+View(all_tweets)
+
+# Create all_corpus
+all_corpus <- VCorpus(all_tweets)
+
+# Clean the corpus
+all_clean <- clean_corpus(all_corpus)
+content(all_clean[[5]])
+
+
+# Create all_tdm
+all_tdm <- TermDocumentMatrix(all_clean)
+View(all_tdm)
+
+# Create all_m
+all_m <- as.matrix(all_tdm)
+View(all_m)
+
+# Print a commonality cloud
+commonality.cloud(all_m, max.words = 100, colors = "steelblue1")
+
+# Comparison Cloud =================================================
+
+# Clean the corpus
+all_clean <- clean_corpus(all_corpus)
+
+# Create all_tdm
+all_tdm <- TermDocumentMatrix(all_clean)
+
+# Give the columns distinct names
+colnames(all_tdm) <- c("Trump", "Biden")
+
+# Create all_m
+all_m <- as.matrix(all_tdm)
+View(all_m)
+
+# Create comparison cloud
+comparison.cloud(all_m, colors = c("red", "blue"), max.words = 50)
+
+```
+
+```{r Pyramit Plot}
+# Pyramit Plot =================================================
+
+top25_df <- all_m %>%
+# Convert to data frame
+as_tibble(rownames = "word") %>%
+# Keep rows where word appears everywhere
+filter_all(all_vars(. > 0)) %>% 
+# Get difference in counts
+mutate(difference = biden - trum) %>%
+# Keep rows with biggest difference
+top_n(25, wt = difference) %>% 
+# Arrange by descending difference
+arrange(desc(difference))
+
+View(top25_df)
+
+# Draw the Pyramid Plot
+
+pyramid.plot(
+# Chardonnay counts
+  top25_df$chardonnay,
+# Coffee counts
+  top25_df$coffee,
+# Words
+  labels = top25_df$word,
+  top.labels = c("Biden", "Words", "Trump"),
+  main = "Words in Common",
+  unit = NULL,
+  gap = 8,
+)
+```
+
+
+```{r Word Network}
+
+# Word Networks =================================================
+
+# Word association
+word_associate(biden_tweets, match.string = "Trump", 
+               network.plot = TRUE, cloud.colors = c("gray85", "darkred"))
+
+# Add title
+title(main = "Trump in Biden Tweet Associations")
+
+# END CODE ==================================================================================================
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
