@@ -20,6 +20,10 @@ library(metricsgraphics)
 library(ggthemes)
 library(dplyr)
 library(ggplot2)
+library(tibbletime)
+
+install.packages("tibbletime")
+
 ```
 
 
@@ -35,7 +39,11 @@ trump_tw1 <- read.csv("~/Desktop/İTÜ Big Data Grup /Bitirme Projesi /archive/t
 
 ```{r Cleaning Data}
 # Isolate text from tweets
-biden_tweets <- biden_tw$tweet
+
+biden_cptw <- filter(biden_tw, timestamp >= "2019-04-25 10:00")
+View(biden_cptw)
+
+biden_tweets <- biden_cptw$tweet
 biden_tweets
 
 # Make a vector source from biden_tweets
@@ -105,8 +113,10 @@ wordcloud(terms_vec, term_frequency,
 ```{r Other Clouds and Networks}
 View(trump_tw)
 
+trump_cptw <- filter(trump_tw, date >= "2019-06-18 00:10:06")
+
 # Isolate chardonnay text from tweets
-trump_tweets <- trump_tw$content
+trump_tweets <- trump_cptw$content
 View(trump_tweets)
 
 # Make a vector source from chardonnay_tweets
