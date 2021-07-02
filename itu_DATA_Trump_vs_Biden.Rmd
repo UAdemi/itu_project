@@ -1,8 +1,8 @@
 ---
 title: "ITU Project"
-output: html_notebook
-editor_options: 
-  chunk_output_type: inline
+# output: html_notebook
+# editor_options: 
+  # chunk_output_type: inline
 ---
 
 ```{r Twitter Social Media Analytics - Trump vs. Biden Project}
