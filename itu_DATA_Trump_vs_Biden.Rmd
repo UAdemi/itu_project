@@ -27,6 +27,16 @@ library(tibbletime)
 
 install.packages("tibbletime")
 
+
+head(biden_cptw)
+head(trump_cptw)
+
+bind_rows(binden_campaing = biden_cptw,
+          trump_campaing = trump_cptw,
+          .id = "candidate")) %>%
+  select(candidate, date, timestamp, retweets)
+
+
 ```
 
 
@@ -152,6 +162,7 @@ biden_afinn_words
 # Get counts by sentiment
 biden_afinn_words %>%
   count(value)
+
   
 # Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
 biden_afinn_words <- biden_afinn_words %>%
@@ -160,7 +171,7 @@ biden_afinn_words <- biden_afinn_words %>%
   
 biden_afinn_words
 
-# Create biden_count_afinn by forwarding ag_afinn_words to count(), passing in value, index.
+# Create biden_count_afinn by forwarding ag_afinn_words to count(), passing in value, index. Gives us value by twet
 biden_count_afinn <- biden_afinn_words %>%
   # Count by value, index
   count(value, index)
@@ -223,7 +234,7 @@ all_df_afinn <- bind_rows(biden = biden_afinn_words,
 
 
 
-# Plot value, filled by book
+# Plot value, filled by Tweets
 ggplot(all_df_afinn, aes(value, fill = Tweets)) + 
   # Set the alpha transparency to 0.3.
   geom_density(alpha = 0.3) + 
@@ -231,24 +242,30 @@ ggplot(all_df_afinn, aes(value, fill = Tweets)) +
   ggtitle("AFINN Score Densities")
 
 
+biden_afinn_words
 
 
-# Subset to nrc
-nrc_lex <- get_sentiments("nrc")
 
-nrc_lex
+biden_afinn_agg <- biden_afinn_words %>% 
+  # Group by tweet
+  select(value, index, count) %>%
+  group_by(index)
 
-# Make the nrc counts object
-nrc_counts <- nrc_lex %>%
-	count(sentiment)
+biden_afinn_agg_pl
 
-nrc_counts
+# To see the value of eact tweet we code:
+ biden_afinn_agg_pl <- biden_afinn_agg %>%
+  # Sum values times n (by tweet)
+  summarize(total_value = sum(value * count))
 
-# Plot n vs. sentiment
-ggplot(nrc_counts, aes(x = sentiment, y = n)) +
-  # Add a col layer
-  geom_col() +
-  theme_gdocs()
+# Plot total_value vs. line
+ggplot(biden_afinn_agg_pl, aes(x = index, y = total_value)) + 
+  # Add a smooth trend curve
+  geom_smooth() + ggtitle("Plot of AFINN by Each Tweet") + 
+  xlab("Tweet Number") + 
+  ylab("AFINN Value")
+
+
 ```
 
 
