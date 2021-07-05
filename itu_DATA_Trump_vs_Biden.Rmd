@@ -82,9 +82,270 @@ dim(biden_tdm)
 biden_m <- as.matrix(biden_tdm)
 biden_m
 
+# Create a Document Term Matrix out of our cleaned data and convert it to a Matrix
+biden_dtm <- DocumentTermMatrix(biden_corpuscl)
+
+# Convert biden_dtm to a matrix
+biden_m2 <- as.matrix(biden_dtm)
+
+```
+
+```{r Simple Sentiment Analysis - Biden Polarity Score}
+pos_score <- polarity(biden_tweets)
+
+head(biden_cptw)
+
+
+# Get counts
+pos_counts <- counts(pos_score)
+
+pos_counts
+
+
+# Number of positive words
+n_good <- length(pos_counts$pos.words[[1]]) 
+
+n_good
+
+# Total number of words
+n_words <- pos_counts$wc
+
+# Verify polarity score
+n_good / sqrt(n_words)
+```
+
+
+```{r Sentiment Analysis with Tidy - Biden Corpus}
+# Tidy up the DTM
+biden_tidy <- tidy(biden_dtm)
+
+# Examine tidy with a word you saw
+biden_tidy[831:835, ]
+
+
+#Get Sentiment Lexicons
+
+afinn <- get_sentiments("afinn")
+
+afinn %>%
+	summarize(
+		min = min(value),
+		max = max(value)
+)
+
+head(afinn)
+
+# Count AFINN scores
+afinn %>% 
+  count(value)
+
+# Join text to lexicon (afinn)
+
+str(biden_tidy)
+
+biden_afinn_words <- inner_join(biden_tidy, afinn, by = c("term" = "word"))
+
+
+# Examine
+biden_afinn_words
+
+# Get counts by sentiment
+biden_afinn_words %>%
+  count(value)
+  
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+biden_afinn_words <- biden_afinn_words %>%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+  
+biden_afinn_words
+
+# Create biden_count_afinn by forwarding ag_afinn_words to count(), passing in value, index.
+biden_count_afinn <- biden_afinn_words %>%
+  # Count by value, index
+  count(value, index)
+
+biden_count_afinn
+
+
+# Generate biden_spread_afinn by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+biden_spread_afinn <- biden_count_afinn %>%
+  # Spread sentiments
+  spread(value, n, fill = 0)
+
+# Review the spread data
+biden_spread_afinn
+
+head(biden_afinn_words,20)
+
+# exclude variables v1, v2, v3
+biden_polarity_plot_afinn <- biden_afinn_words %>%
+                    select(term, count, index)
+
+head(biden_polarity_plot,10)
+
+biden_polarity_afinn <- biden_polarity_plot %>%
+  # Inner join to lexicon
+  inner_join(afinn, by = c("term" = "word")) %>%
+  # Count the sentiment scores
+  count(value, index) %>% 
+  # Spread the sentiment into positive and negative columns
+  spread(value, n, fill = 0) %>%
+  # Add polarity column
+  mutate(polarity = positive - negative)
+
+biden_polarity_afinn
+
+# Plot polarity vs. index
+ggplot(biden_polarity, aes(x = index, y = polarity)) + 
+  # Add a smooth trend curve
+  geom_smooth()
+
+
+# Create a Document Term Matrix out of our cleaned data and convert it to a Matrix
+trump_dtm <- DocumentTermMatrix(trump_corpuscl)
+
+# Convert biden_dtm to a matrix
+trump_m2 <- as.matrix(biden_dtm)
+
+# Tidy up the DTM
+trump_tidy <- tidy(trump_dtm)
+
+
+trump_afinn_words <- trump_tidy %>% 
+	inner_join(afinn, by = c("term" = "word"))
+
+# Combine. Use bind_rows() to combine ag_afinn to oz_afinn. Set the .id argument to "book" to create a new column with the name of each book.
+all_df_afinn <- bind_rows(biden = biden_afinn_words, 
+                          trump = trump_afinn_words, 
+                          .id = "Tweets")
+
+all_df_afinn
+
+
+# Plot value, filled by book
+ggplot(all_df_afinn, aes(value, fill = Tweets)) + 
+  # Set the alpha transparency to 0.3.
+  geom_density(alpha = 0.3) + 
+  theme_gdocs() +
+  ggtitle("AFINN Score Densities")
+
+
+
+
+# Subset to nrc
+nrc_lex <- get_sentiments("nrc")
+
+nrc_lex
+
+# Make the nrc counts object
+nrc_counts <- nrc_lex %>%
+	count(sentiment)
+
+nrc_counts
+
+# Plot n vs. sentiment
+ggplot(nrc_counts, aes(x = sentiment, y = n)) +
+  # Add a col layer
+  geom_col() +
+  theme_gdocs()
+```
+
+
+```{r Sentiment Analysis with Tidy - Biden Corpus - 2 }
+
+# Qdap polarity
+
+biden_qdap_polarity <- polarity(biden_tweets)
+trump_qdap_polarity <- polarity(trump_tweets)
+
+biden_qdap_polarity
+
+
+
+# Combine. Use bind_rows() to combine biden_qdap_polarity to trump_qdap_polarity. Set the .id argument to "Tweets" to create a new column with the name of each book.
+all_df_qdap <- bind_rows(biden = biden_tw_df_qdap, 
+                     trump = trump_tw_df_qdap,
+                     .id = "Tweets")
+
+
+head(all_df_qdap)
+
+
+
+# Get Bing lexicon
+bing <- get_sentiments("bing")
+
+head(bing)
+
+# Join text to lexicon (bing)
+str(biden_tidy)
+
+biden_bing_words <- inner_join(biden_tidy, bing, by = c("term" = "word"))
+
+# Examine
+biden_bing_words
+
+# Get counts by sentiment
+biden_bing_words %>%
+  count(sentiment)
+  
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+biden_bing_words <- biden_bing_words %>%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+  
+head(biden_bing_words,10)
+
+# Create ag_count by forwarding ag_bing_words to count(), passing in sentiment, index.
+biden_count <- biden_bing_words %>%
+  # Count by sentiment, index
+  count(sentiment, index)
+
+biden_count
+
+
+# Generate moby_spread by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+biden_spread <- biden_count %>%
+  # Spread sentiments
+  spread(sentiment, n, fill = 0)
+
+# Review the spread data
+biden_spread
+
+head(biden_bing_words)
+
+# exclude variables v1, v2, v3
+biden_polarity_plot <- biden_bing_words %>%
+                    select(term, count, index)
+
+str(biden_polarity_plot)
+
+biden_polarity <- biden_polarity_plot %>%
+  # Inner join to lexicon
+  inner_join(bing, by = c("term" = "word")) %>%
+  # Count the sentiment scores
+  count(sentiment, index) %>% 
+  # Spread the sentiment into positive and negative columns
+  spread(sentiment, n, fill = 0) %>%
+  # Add polarity column
+  mutate(polarity = positive - negative)
+
+biden_polarity
+
+# Plot polarity vs. index
+ggplot(ag_polarity, aes(x = index, y = polarity)) + 
+  # Add a smooth trend curve
+  geom_smooth()
+
+
+
 ```
 
 ```{r Descriptive Analysis}
+# Dimensions of DTM matrix
+dim(biden_dtm)
+
 # Calculate the row sums of biden_m
 term_frequency <- rowSums(biden_m)
 View(term_frequency)
@@ -258,3 +519,10 @@ title(main = "Trump in Biden Tweet Associations")
 
 ```
 
+
+```{r Sentiment Analysis}
+
+
+
+
+```
