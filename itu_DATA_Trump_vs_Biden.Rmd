@@ -115,7 +115,7 @@ n_good / sqrt(n_words)
 ```
 
 
-```{r Sentiment Analysis with Tidy - Biden Corpus}
+```{r Sentiment Analysis with Afinn}
 # Tidy up the DTM
 biden_tidy <- tidy(biden_dtm)
 
@@ -220,7 +220,7 @@ all_df_afinn <- bind_rows(biden = biden_afinn_words,
                           trump = trump_afinn_words, 
                           .id = "Tweets")
 
-all_df_afinn
+
 
 
 # Plot value, filled by book
@@ -252,26 +252,47 @@ ggplot(nrc_counts, aes(x = sentiment, y = n)) +
 ```
 
 
-```{r Sentiment Analysis with Tidy - Biden Corpus - 2 }
+```{r Sentiment Analysis with Tidy - Qdap Polarity - Trump & Biden}
 
 # Qdap polarity
 
 biden_qdap_polarity <- polarity(biden_tweets)
 trump_qdap_polarity <- polarity(trump_tweets)
 
-biden_qdap_polarity
-
-
+biden_tw_df_qdap <- as.data.frame(biden_tweets)
+trump_tw_df_qdap <- as.data.frame(trump_tweets)
 
 # Combine. Use bind_rows() to combine biden_qdap_polarity to trump_qdap_polarity. Set the .id argument to "Tweets" to create a new column with the name of each book.
+colnames(biden_tw_df_qdap) <- c("Tweet Content")
+colnames(trump_tw_df_qdap) <-  c("Tweet Content")
+ 
+
 all_df_qdap <- bind_rows(biden = biden_tw_df_qdap, 
-                     trump = trump_tw_df_qdap,
-                     .id = "Tweets")
+                         trump = trump_tw_df_qdap,
+                         .id = "Candidate")
+
+all_df_qdap
 
 
-head(all_df_qdap)
+# Calc overall polarity score
+all_df_qdap %$% polarity(`Tweet Content`)
 
 
+# Calc polarity score by person. This will calculate polarity according to each individual person. Since it is all within parentheses the result will be printed too.
+(polarity_qdap_canditates <- all_df_qdap %$% polarity(`Tweet Content`, Candidate))
+
+# Counts table from polarity_qdap_canditates. Apply counts() to polarity_qdap_canditates to print the specific emotional words that were found.
+counts(polarity_qdap_canditates)
+
+# Plot the conversation polarity
+plot(polarity_qdap_canditates)
+
+
+
+```
+
+
+```{r Sentiment Analysis with Bing}
 
 # Get Bing lexicon
 bing <- get_sentiments("bing")
