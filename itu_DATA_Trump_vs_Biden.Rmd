@@ -10,7 +10,7 @@ title: "ITU Project"
 
 
 ```{r Packages}
-library(tm) #bu paketi kullandık
+library(tm)
 library(qdap) 
 library(wordcloud)
 library(viridisLite)
@@ -25,19 +25,15 @@ library(dplyr)
 library(ggplot2)
 library(tibbletime)
 
-install.packages("tibbletime")
-
 ```
 
 
 ```{r Importing Data}
 
 #Import Data from CSV
-biden_tw <- read.csv("./archive/JoeBidenTweets.csv", stringsAsFactors = FALSE)
-View(biden_tw)
-
-trump_tw <- read.csv("./archive/realdonaldtrump.csv", stringsAsFactors = FALSE)
-trump_tw1 <- read.csv("./archive/trumptweets.csv", stringsAsFactors = FALSE)
+biden_tw <- read.csv("./archive/JoeBidenTweets.csv")
+trump_tw <- read.csv("./archive/realdonaldtrump.csv")
+trump_tw1 <- read.csv("./archive/trumptweets.csv")
 ```
 
 ```{r Cleaning Data}
@@ -47,7 +43,6 @@ biden_cptw <- filter(biden_tw, timestamp >= "2019-04-25 10:00")
 View(biden_cptw)
 
 biden_tweets <- biden_cptw$tweet
-biden_tweets
 
 # Make a vector source from biden_tweets
 biden_source <- VectorSource(biden_tweets)
@@ -88,6 +83,38 @@ biden_dtm <- DocumentTermMatrix(biden_corpuscl)
 # Convert biden_dtm to a matrix
 biden_m2 <- as.matrix(biden_dtm)
 
+# Trump data
+
+View(trump_tw)
+
+trump_cptw <- filter(trump_tw, date >= "2019-06-18 00:10:06")
+
+# Isolate chardonnay text from tweets
+trump_tweets <- trump_cptw$content
+View(trump_tweets)
+
+# Make a vector source from chardonnay_tweets
+trump_source <- VectorSource(trump_tweets)
+
+# Make a volatile corpus: chardonnay_corpus
+trump_corpus <- VCorpus(trump_source)
+trump_corpus[[45]][1]
+
+trump_corpuscl <- clean_corpus(trump_corpus)
+
+trump_corpuscl[[90]][1]
+View(trump_corpuscl)
+
+# Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
+trump_tdm <- TermDocumentMatrix(trump_corpuscl[1:10])
+View(trump_tdm)
+dim(trump_tdm)
+
+
+# Convert trump_tdm to a matrix
+trump_m <- as.matrix(trump_tdm)
+View(trump_tdm)
+
 ```
 
 ```{r Simple Sentiment Analysis - Biden Polarity Score}
@@ -124,7 +151,6 @@ biden_tidy[831:835, ]
 
 
 #Get Sentiment Lexicons
-
 afinn <- get_sentiments("afinn")
 
 afinn %>%
@@ -179,10 +205,10 @@ biden_spread_afinn
 head(biden_afinn_words,20)
 
 # exclude variables v1, v2, v3
-biden_polarity_plot_afinn <- biden_afinn_words %>%
+biden_polarity_plot <- biden_afinn_words %>%
                     select(term, count, index)
 
-head(biden_polarity_plot,10)
+head(biden_polarity_plot_afinn,10)
 
 biden_polarity_afinn <- biden_polarity_plot %>%
   # Inner join to lexicon
@@ -355,7 +381,7 @@ biden_polarity <- biden_polarity_plot %>%
 biden_polarity
 
 # Plot polarity vs. index
-ggplot(ag_polarity, aes(x = index, y = polarity)) + 
+ggplot(biden_polarity, aes(x = index, y = polarity)) + 
   # Add a smooth trend curve
   geom_smooth()
 
@@ -396,35 +422,7 @@ wordcloud(terms_vec, term_frequency,
 
 
 ```{r Other Clouds and Networks}
-View(trump_tw)
 
-trump_cptw <- filter(trump_tw, date >= "2019-06-18 00:10:06")
-
-# Isolate chardonnay text from tweets
-trump_tweets <- trump_cptw$content
-View(trump_tweets)
-
-# Make a vector source from chardonnay_tweets
-trump_source <- VectorSource(trump_tweets)
-
-# Make a volatile corpus: chardonnay_corpus
-trump_corpus <- VCorpus(trump_source)
-trump_corpus[[45]][1]
-
-trump_corpuscl <- clean_corpus(trump_corpus)
-
-trump_corpuscl[[90]][1]
-View(trump_corpuscl)
-
-# Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
-trump_tdm <- TermDocumentMatrix(trump_corpuscl[1:10])
-View(trump_tdm)
-dim(trump_tdm)
-
-
-# Convert trump_tdm to a matrix
-trump_m <- as.matrix(trump_tdm)
-View(trump_tdm)
 ```
 
 
@@ -547,3 +545,4 @@ title(main = "Trump in Biden Tweet Associations")
 
 
 ```
+
