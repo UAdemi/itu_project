@@ -10,6 +10,8 @@ title: "ITU Project"
 
 
 ```{r Packages}
+
+
 library(tm)
 library(qdap) 
 library(wordcloud)
@@ -24,18 +26,19 @@ library(ggthemes)
 library(dplyr)
 library(ggplot2)
 library(tibbletime)
+library(topicmodels)
+library(furrr)
+library(stm)
 
-
+install.packages("furrr")
 install.packages("tibbletime")
+install.packages("topicmodels")
+install.packages("stm")
+
 
 
 head(biden_cptw)
 head(trump_cptw)
-
-bind_rows(binden_campaing = biden_cptw,
-          trump_campaing = trump_cptw,
-          .id = "candidate")) %>%
-  select(candidate, date, timestamp, retweets)
 
 
 ```
@@ -280,7 +283,6 @@ biden_afinn_agg <- biden_afinn_words %>%
   select(value, index, count) %>%
   group_by(index)
 
-biden_afinn_agg_pl
 
 # To see the value of eact tweet we code:
  biden_afinn_agg_pl <- biden_afinn_agg %>%
@@ -293,6 +295,105 @@ ggplot(biden_afinn_agg_pl, aes(x = index, y = total_value)) +
   geom_smooth() + ggtitle("Plot of AFINN by Each Tweet") + 
   xlab("Tweet Number") + 
   ylab("AFINN Value")
+```
+
+
+```{r Sentiment Analysis with Afinn}
+
+# Start with the tidied Twitter data
+as.data.farbiden_tweets %>% 
+  # Count each word used in each tweet
+  count(word, tweet_id) %>%
+  # Use the word counts by tweet to create a DTM
+  cast_dtm(tweet_id, word, n)
+
+
+head(biden_tweets)
+
+#{r Get Sentiment Score between -5 and 5}
+# Tidy up the DTM
+biden_tidy <- tidy(biden_dtm)
+
+#Get Sentiment Lexicons
+afinn <- get_sentiments("afinn")
+
+# Join two data frames
+biden_afinn_words <- inner_join(biden_tidy, afinn, by = c("term" = "word"))
+
+# Create a Document Term Matrix out of our cleaned data and convert it to a Matrix
+trump_dtm <- DocumentTermMatrix(trump_corpuscl)
+
+# Tidy up the DTM
+trump_tidy <- tidy(trump_dtm)
+
+
+trump_afinn_words <- trump_tidy %>% 
+  inner_join(afinn, by = c("term" = "word"))
+
+# Combine. Use bind_rows() to combine ag_afinn to oz_afinn. Set the .id argument to "book" to create a new column with the name of each book.
+all_df_afinn <- bind_rows(biden = biden_afinn_words, 
+                          trump = trump_afinn_words, 
+                          .id = "Tweets")
+
+
+
+#######
+
+# Plot value, filled by Tweets
+ggplot(all_df_afinn, aes(value, fill = Tweets)) + 
+  # Set the alpha transparency to 0.3.
+  geom_density(alpha = 0.3) + 
+  theme_gdocs() +
+  ggtitle("AFINN Score Densities")
+
+#######
+    
+all_afinn_agg <- all_df_afinn %>% 
+  # Group by tweet
+    select(value, document, count) %>%
+    group_by(document) %>% 
+    summarize(total_value = sum(value * count))   
+
+biden_afinn_agg <- biden_afinn_words %>% 
+  # Group by tweet
+    select(value, document, count) %>%
+    group_by(document) %>% 
+    summarize(total_value = sum(value * count)) 
+
+trump_afinn_agg <- trump_afinn_words %>% 
+  # Group by tweet
+    select(value, document, count) %>%
+    group_by(document) %>% 
+    summarize(total_value = sum(value * count)) 
+
+mean(biden_afinn_agg$total_value)
+
+
+trump_cptw$document <- seq.int(nrow(trump_cptw))
+biden_cptw$document <- seq.int(nrow(biden_cptw))
+
+trump_afinn_agg$document <- as.numeric(trump_afinn_agg$document)
+biden_afinn_agg$document <- as.numeric(biden_afinn_agg$document)
+
+
+trump_cptw_score <- inner_join(trump_cptw, trump_afinn_agg, by = "document")
+biden_cptw_score <- inner_join(biden_cptw, trump_afinn_agg, by = "document")
+
+
+head(biden_cptw)
+head(trump_cptw)
+
+all_cptw <- bind_rows(biden=biden_cptw_score, trump=trump_cptw_score, .id = "candidates") %>% 
+            unite(date, timestamp, date, na.rm = T) %>% 
+            unite(favs, likes, favorites, na.rm = T) %>% 
+            unite(twits, tweet, content, na.rm = T) %>% 
+            unite(url, url, link, na.rm = T) %>% 
+            unite(mentions, mentions, replies, na.rm = T)
+
+
+sapply(all_cptw, function(x) sum(is.na(x)))
+
+table(all_cptw$candidates)
 
 
 ```
@@ -559,7 +660,68 @@ title(main = "Trump in Biden Tweet Associations")
 ```
 
 
-```{r Sentiment Analysis}
+```{r Topic Modelling}
+
+
+biden_tidy1 <- biden_tidy %>%
+  filter(!term %in% c("the", "get", "just", "can", "don't", "stil", "it's", "its", "this", "and", "'re", "I'm", "many", "i'm","'re ", " 're", "cant", "can't", "i'm ", "i'll", "can't", "it's ", "but", "let"))
+
+# Start with the tidied Twitter data
+biden_tidy_dtm <- biden_tidy1 %>% 
+  # Count each word used in each tweet
+  count(term, document) %>%
+  # Use the word counts by tweet to create a DTM
+  cast_sparse(document, term, n)
+
+# Coerce dtm_twitter into a matrix called matrix_twitter
+matrix_biden_topic <- as.matrix(biden_tidy_dtm)
+
+# Print rows 1 through 5 and columns 90 through 95
+matrix_biden_topic[1:5, 90:95]
+
+
+# Run an LDA with 2 topics and a Gibbs sampler
+lda_out_biden6 <- LDA(
+	biden_tidy_dtm, 
+	k = 6,
+	method = "Gibbs",
+	control = list(seed = 1200)
+)
+
+
+# Tidy the matrix of word probabilities
+lda_topics_biden6 <- lda_out_biden5 %>%
+tidy(matrix = "beta")
+
+# Arrange the topics by word probabilities in descending order___ %>% 
+ lda_topics_biden6 %>%
+arrange(desc(beta))
+
+ 
+biden_documents <- tidy(lda_out_biden6, matrix = "gamma") %>% arrange(desc(gamma))
+biden_documents
+ 
+
+# Select the top 15 terms by topic and reorder term
+word_probs_biden6 <- lda_topics_biden5 %>%
+group_by(topic) %>%
+top_n(20, beta) %>%
+ungroup() %>%
+mutate(term6 = fct_reorder(term, beta))
+
+
+
+ggplot(
+  word_probs_biden6, 
+  aes(term6, beta, fill = as.factor(topic))
+) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+
+word_probs_biden8$topic <- factor(word_probs_biden8$topic, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"),
+                  labels = c("Nation", "Family - Middle Class", "Health Care", "Democrats", "Working Class", "Campaing", "Violence", "Trump Presidency", "Voter Turnout"))
 
 
 
