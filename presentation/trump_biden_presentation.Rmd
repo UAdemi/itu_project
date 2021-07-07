@@ -1,0 +1,714 @@
+---
+title: "Trump and Biden Tweet Analysis"
+subtitle: "for İTÜ Project"
+author: "Ubeydullah Ademi & Yusuf Akbulut"
+institute: "Boğaziçi University & Marmara University"
+date: "05/07/2021"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      
+---
+
+```{r setup, include=FALSE, error=TRUE}
+
+options(htmltools.dir.version = FALSE)
+
+```
+
+Here are the packages we used in this study:
+
+```{r warning=FALSE, message=FALSE, error=TRUE}
+
+library(tm)
+library(qdap) 
+library(wordcloud)
+library(viridisLite)
+library(plotrix)
+library(qdap)
+library(tidyverse)
+library(tidytext)
+library(magrittr)
+library(metricsgraphics)
+library(ggthemes)
+library(dplyr)
+library(ggplot2)
+library(tibbletime)
+library(topicmodels)
+library(furrr)
+library(stm)
+
+```
+
+
+```{r xaringan-tile-view, include=FALSE, error=TRUE}
+xaringanExtra::use_tile_view()
+xaringanExtra::use_search(show_icon = TRUE)
+xaringanExtra::use_scribble()
+```
+---
+background-image: url(https://deadline.com/wp-content/uploads/2020/10/Trump-Biden-Twitter.jpg?w=681&h=383&crop=1)
+
+.footnote[
+[1] image from AP]
+
+---
+class: inverse, center, middle
+
+# We have witnessed tweet wars between two candidates for being the most powerful person in the world.
+
+---
+class: inverse, center, middle
+
+# In this analysis, we have traced the patterns of this war. 
+
+---
+
+# Our main tool for this analysis is **R**. It has necessary packages needed for the task.
+
+--
+
+## Here are the types of analysis we made on the data:
+
+--
+
+1. Data Cleaning and Preperation
+
+2. Descriptive Analysis
+
+3. Visualisation - Word Networks
+
+4. Topic Modelling
+
+5. Sentiment Analysis
+
+
+
+---
+class: inverse, center, middle
+
+# 1. Data Gathering and Preperation
+
+---
+
+
+
+We are insterested in past data so because of the twitter API limitations we worked on previously gathered data on [Kaggle.com](https://kaggle.com) downloaded as _.csv_ files.
+
+```{r label="Importing Data", eval=FALSE, tidy=FALSE, error=TRUE}
+biden_tw <- read.csv("../archive/JoeBidenTweets.csv")
+trump_tw <- read.csv("../archive/realdonaldtrump.csv")
+```
+
+--
+
+We have limited the scope of the study to the tweets sent in campain period
+
+```{r eval=FALSE, tidy=FALSE, error=TRUE}
+biden_cptw <- filter(biden_tw, timestamp >= "2019-04-25 10:00")
+trump_cptw <- filter(trump_tw, date >= "2019-06-18 00:10:06")
+
+```
+
+
+--
+
+There is also necessary cleaning progess we turned into a function called **cleancorpus** 
+
+```{r eval=FALSE, tidy=FALSE, error=TRUE}
+
+clean_corpus <- function(corpus){
+  corpus <- tm_map(corpus, content_transformer(replace_abbreviation))
+  corpus <- tm_map(corpus, removeNumbers)
+  corpus <- tm_map(corpus, content_transformer(strip), char.keep="#")
+  corpus <- tm_map(corpus, removeWords, c(stopwords("en")))
+  corpus <- tm_map(corpus, content_transformer(tolower))
+  corpus <- tm_map(corpus, stripWhitespace)
+  return(corpus)
+}
+
+```
+
+---
+
+The type of analysis needs a special form of text which is called corpus and its transformed matrices. We made some transformations to get that for.
+
+`Import -> Clean -> Filter -> Vectorise -> Corpus -> Term Document Matrix -> Document Term Matrix`
+
+We have used 
+
+```{r eval=FALSE, tidy=FALSE, error=TRUE}
+
+biden_tweets <- biden_cptw$tweet
+trump_tweets <- trump_cptw$content
+
+# Make a vector source
+biden_source <- VectorSource(biden_tweets)
+trump_source <- VectorSource(trump_tweets)
+
+biden_corpus <- VCorpus(biden_source)
+trump_corpus <- VCorpus(trump_source)
+
+# Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
+
+biden_corpuscl <- clean_corpus(biden_corpus)
+trump_corpuscl <- clean_corpus(trump_corpus)
+
+biden_tdm <- TermDocumentMatrix(biden_corpuscl)
+trump_tdm <- TermDocumentMatrix(trump_corpuscl)
+
+biden_m <- as.matrix(biden_tdm)
+trump_m <- as.matrix(trump_tdm)
+
+biden_dtm <- DocumentTermMatrix(biden_corpuscl)
+trump_dtm <- DocumentTermMatrix(trump_corpuscl)
+
+biden_m2 <- as.matrix(biden_dtm)
+trump_m2 <- as.matrix(trump_dtm)
+
+```
+
+
+---
+
+class: inverse, center, middle
+
+# 2. Descriptive Analysis
+
+---
+
+In this first section we made some descriptive analysis before going deep. we calculated polarity score for Biden and Trump.
+
+```{r eval=FALSE, tidy=FALSE, error=TRUE}
+
+# Calculate the row sums of biden_m
+term_frequency_biden <- rowSums(biden_m)
+term_frequency_trump <- rowSums(trump_m)
+
+# Sort term_frequency in decreasing order
+term_frequency_biden <- sort(term_frequency_biden, decreasing = TRUE)
+term_frequency_trump <- sort(term_frequency_trump, decreasing = TRUE)
+
+```
+
+---
+
+```{r fig.height=4, dev='svg', error=TRUE}
+# Plot a barchart of the 10 most common words
+b <- term_frequency_biden[1:10]
+barplot(b, col = "tan", las = 2)
+```
+
+---
+
+```{r fig.height=4, dev='svg', error=TRUE}
+# Plot a barchart of the 10 most common words
+a <- term_frequency_trump[1:10]
+barplot(a, col = "tan", las = 2)
+```
+
+
+---
+
+class: inverse, center, middle
+
+# 3. Visualisations
+
+---
+
+Word cloud of most used by candidates
+
+
+```{r fig.height=4, dev='svg', error=TRUE}
+# Vector of terms
+terms_vec_trump <- names(term_frequency_trump)
+
+# Create a wordcloud for the values in word_freqs
+wordcloud(terms_vec_trump, term_frequency_trump, 
+          max.words = 50, colors = "red")
+
+```
+
+---
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+
+# Vector of terms
+terms_vec_biden <- names(term_frequency_biden)
+View(terms_vec_biden)
+
+# Create a wordcloud for the values in word_freqs
+wordcloud(terms_vec_biden, term_frequency_biden, 
+          max.words = 50, colors = "blue")
+
+```
+
+---
+
+There is also another visualisation compares two in the same plot
+
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+
+# Analyzing Common Words btw Trump & Biden with commonality cloud 
+all_trump <- paste(trump_tweets, collapse = " ")
+all_biden <- paste(biden_tweets, collapse = " ")
+
+# Create all_tweets
+all_tweets <- c(all_trump, all_biden)
+
+# Convert to a vector source
+all_tweets <- VectorSource(all_tweets)
+
+# Create all_corpus
+all_corpus <- VCorpus(all_tweets)
+
+# Clean the corpus
+all_clean <- clean_corpus(all_corpus)
+
+# Create all_tdm
+all_tdm <- TermDocumentMatrix(all_clean)
+
+# Create all_m
+all_m <- as.matrix(all_tdm)
+
+```
+
+---
+
+Here is the commanality cloud of two candidates:
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+# Print a commonality cloud
+commonality.cloud(all_m, max.words = 100, colors = "steelblue1")
+```
+
+---
+
+Here is the comparison cloud:
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+
+# Give the columns distinct names
+colnames(all_tdm) <- c("Trump", "Biden")
+
+# Create all_m
+all_m <- as.matrix(all_tdm)
+
+# Create comparison cloud
+comparison.cloud(all_m, colors = c("red", "blue"), max.words = 50)
+
+```
+
+---
+
+In this plot we made another comparison of most used words in Biden and Trumps tweets
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+top25_df <- all_m %>%
+# Convert to data frame
+as_tibble(rownames = "word") %>%
+# Keep rows where word appears everywhere
+filter_all(all_vars(. > 0)) %>% 
+# Get difference in counts
+mutate(difference = Biden - Trump) %>%
+# Keep rows with biggest difference
+top_n(25, wt = difference) %>% 
+# Arrange by descending difference
+arrange(desc(difference))
+```
+
+
+---
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+# Draw the Pyramid Plot
+pyramid.plot(
+  top25_df$Biden,
+  top25_df$Trump,
+  labels = top25_df$word,
+  top.labels = c("Biden", "Words", "Trump"),
+  main = "Words in Common",
+  unit = NULL,
+  gap = 8,
+)
+```
+---
+Our Last Visualistion is about the world networks:
+
+# ???
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+
+# Add “donald” and “president” to the list: new_stops
+new_stops <- c("donald", "my", "along", "and", "president", stopwords("en"))
+
+# Remove stop words from text
+biden_tweets_nt <- removeWords(biden_tweets, new_stops)
+
+
+# Word association
+word_associate(biden_tweets_nt[1:999], match.string = "Trump", 
+               network.plot = TRUE, cloud.colors = c("gray85", "darkred"))
+
+# Add title
+title(main = "Trump in Biden Tweet Associations")
+```
+
+---
+
+class: inverse, center, middle
+
+# 4. Sentiment Analysis
+
+---
+
+In this section we have analyzed polarity score:
+
+```{r eval=FALSE, eval=F, echo=T, error=TRUE}
+
+pos_score <- polarity(biden_tweets)
+
+# Get counts
+pos_counts <- counts(pos_score)
+pos_counts
+
+# Number of positive words
+n_good <- length(pos_counts$pos.words[[1]]) 
+n_good
+
+# Total number of words
+n_words <- pos_counts$wc
+
+# Verify polarity score
+n_good / sqrt(n_words)
+
+```
+
+---
+
+In this section we have used Qdap method for sentiment analysis:
+
+
+```{r eval=FALSE, eval=F, echo=T, error=TRUE}
+# Qdap polarity
+# biden_qdap_polarity <- polarity(biden_tweets)
+# trump_qdap_polarity <- polarity(trump_tweets)
+
+biden_tw_df_qdap <- as.data.frame(biden_tweets)
+trump_tw_df_qdap <- as.data.frame(trump_tweets)
+
+# Combine. Use bind_rows() to combine biden_qdap_polarity to trump_qdap_polarity. Set the .id argument to "Tweets" to create a new column with the name of each book.
+colnames(biden_tw_df_qdap) <- c("Tweet Content")
+colnames(trump_tw_df_qdap) <-  c("Tweet Content")
+ 
+
+all_df_qdap <- bind_rows(biden = biden_tw_df_qdap, 
+                         trump = trump_tw_df_qdap,
+                         .id = "Candidate")
+
+# Calc overall polarity score
+# all_df_qdap %$% polarity(`Tweet Content`)
+
+# Calc polarity score by person. This will calculate polarity according to each individual person. Since it is all within parentheses the result will be printed too.
+# (polarity_qdap_canditates <- all_df_qdap %$% polarity(`Tweet Content`, Candidate))
+
+# Counts table from polarity_qdap_canditates. Apply counts() to polarity_qdap_canditates to print the specific emotional words that were found.
+counts(polarity_qdap_canditates)
+```
+
+---
+
+```{r fig.height=4, dev='svg', warning=FALSE, eval=F, echo=T, error=TRUE}
+# Plot the conversation polarity
+#plot(polarity_qdap_canditates)
+```
+
+---
+Next sentiment analysis is done using Afinn
+
+```{r eval=FALSE, tidy=FALSE, warning=FALSE, error=TRUE}
+
+#Get Sentiment Lexicons
+afinn <- get_sentiments("afinn")
+
+afinn %>%
+	summarize(
+		min = min(value),
+		max = max(value)
+)
+
+afinn %>% 
+  count(value)
+
+```
+
+---
+
+```{r eval=FALSE, tidy=FALSE, warning=FALSE, error=TRUE}
+
+#Get Sentiment Lexicons
+afinn <- get_sentiments("afinn")
+
+# Tidy up the DTM
+biden_tidy <- tidy(biden_dtm)
+trump_tidy <- tidy(trump_dtm)
+
+biden_afinn_words <- inner_join(biden_tidy, afinn, by = c("term" = "word"))
+trump_afinn_words <- inner_join(trump_tidy, afinn, by = c("term" = "word"))
+
+
+```
+
+---
+```{r eval=FALSE, tidy=FALSE, warning=FALSE, error=TRUE}
+
+# Get counts by sentiment
+biden_afinn_words %>%
+  count(value)
+
+
+```
+
+---
+```{r eval=FALSE, tidy=FALSE, warning=FALSE, error=TRUE}
+
+# Get counts by sentiment
+trump_afinn_words %>%
+  count(value)
+
+
+```
+---
+
+```{r eval=FALSE, tidy=FALSE, warning=FALSE, error=TRUE}
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+biden_afinn_words <- biden_afinn_words %>%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+# Create biden_count_afinn by forwarding ag_afinn_words to count(), passing in value, index. Gives us value by twet
+biden_count_afinn <- biden_afinn_words %>%
+  # Count by value, index
+  count(value, index)
+# Generate biden_spread_afinn by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+biden_spread_afinn <- biden_count_afinn %>%
+  # Spread sentiments
+  spread(value, n, fill = 0)
+
+all_df_afinn <- bind_rows(biden = biden_afinn_words, 
+                          trump = trump_afinn_words, 
+                          .id = "Tweets")
+```
+---
+
+```{r eval=FALSE, tidy=FALSE, warning=FALSE, error=TRUE}
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+trump_afinn_words <- trump_afinn_words %>%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+# Create biden_count_afinn by forwarding ag_afinn_words to count(), passing in value, index. Gives us value by twet
+trump_count_afinn <- trump_afinn_words %>%
+  # Count by value, index
+  count(value, index)
+# Generate biden_spread_afinn by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+trump_spread_afinn <- trump_count_afinn %>%
+  # Spread sentiments
+  spread(value, n, fill = 0)
+```
+
+---
+This plot shows both candidates Afinn scores:
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+
+# Plot value, filled by Tweets
+ggplot(all_df_afinn, aes(value, fill = Tweets)) + 
+  # Set the alpha transparency to 0.3.
+  geom_density(alpha = 0.3) + 
+  theme_gdocs() +
+  ggtitle("AFINN Score Densities")
+
+
+```
+
+---
+
+We have made sentiment analysis using bing
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}
+
+# Get Bing lexicon
+bing <- get_sentiments("bing")
+
+biden_bing_words <- inner_join(biden_tidy, bing, by = c("term" = "word"))
+
+# Get counts by sentiment
+biden_bing_words %>%
+  count(sentiment)
+```
+
+---
+
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+biden_bing_words <- biden_bing_words %>%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+  
+head(biden_bing_words,10)
+
+```
+
+---
+
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+
+# Create ag_count by forwarding ag_bing_words to count(), passing in sentiment, index.
+biden_count <- biden_bing_words %>%
+  # Count by sentiment, index
+  count(sentiment, index)
+
+
+# Generate moby_spread by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+biden_spread <- biden_count %>%
+  # Spread sentiments
+  spread(sentiment, n, fill = 0)
+
+```
+
+---
+
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+
+# exclude variables v1, v2, v3
+biden_polarity_plot <- biden_bing_words %>%
+                    select(term, count, index)
+
+str(biden_polarity_plot)
+
+biden_polarity <- biden_polarity_plot %>%
+  # Inner join to lexicon
+  inner_join(bing, by = c("term" = "word")) %>%
+  # Count the sentiment scores
+  count(sentiment, index) %>% 
+  # Spread the sentiment into positive and negative columns
+  spread(sentiment, n, fill = 0) %>%
+  # Add polarity column
+  mutate(polarity = positive - negative)
+
+```
+
+---
+
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+
+biden_polarity
+
+```
+
+---
+
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+
+# Plot polarity vs. index
+ggplot(biden_polarity, aes(x = index, y = polarity)) + 
+  # Add a smooth trend curve
+  geom_smooth()
+
+
+```
+
+
+
+---
+
+class: inverse, center, middle
+
+# 5. Topic Modelling
+
+---
+
+In the last section, we have created topic model for Biden tweets:
+
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+
+biden_tidy1 <- biden_tidy %>%
+  filter(!term %in% c("the", "get", "just", "can", "don't", "stil", "it's", "its", "this", "and", "'re", "I'm", "many", "i'm","'re ", " 're", "cant", "can't", "i'm ", "i'll", "can't", "it's ", "but", "let"))
+
+# Start with the tidied Twitter data
+biden_tidy_dtm <- biden_tidy1 %>% 
+  # Count each word used in each tweet
+  count(term, document) %>%
+  # Use the word counts by tweet to create a DTM
+  cast_sparse(document, term, n)
+
+# Coerce dtm_twitter into a matrix called matrix_twitter
+matrix_biden_topic <- as.matrix(biden_tidy_dtm)
+
+```
+
+---
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+
+
+# Run an LDA with 2 topics and a Gibbs sampler
+lda_out_biden5 <- LDA(
+	biden_tidy_dtm, 
+	k = 5,
+	method = "Gibbs",
+	control = list(seed = 1200)
+)
+
+
+# Tidy the matrix of word probabilities
+lda_topics_biden5 <- lda_out_biden5 %>%
+tidy(matrix = "beta")
+
+# Arrange the topics by word probabilities in descending order___ %>% 
+lda_topics_biden5 %>%
+    arrange(desc(beta))
+
+ 
+biden_documents <- tidy(lda_out_biden5, matrix = "gamma") %>% arrange(desc(gamma))
+
+```
+
+---
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+ 
+
+# Select the top 15 terms by topic and reorder term
+word_probs_biden5 <- lda_topics_biden5 %>%
+    group_by(topic) %>%
+    top_n(20, beta) %>%
+    ungroup() %>%
+    mutate(term5 = fct_reorder(term, beta))
+
+word_probs_biden5$topic <- factor(word_probs_biden5$topic, levels = c("1", "2", "3", "4", "5"), labels = c("Nation", "Trump Presidency", "Campain and Election", "Health Care", "Biden Presidency"))
+
+```
+
+---
+
+```{r fig.height=4, dev='svg', warning=FALSE, error=TRUE}  
+ggplot(
+  word_probs_biden5, 
+  aes(term5, beta, fill = as.factor(topic))
+) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+ 

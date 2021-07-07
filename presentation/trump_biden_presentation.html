@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Trump and Biden Tweet Analysis</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Ubeydullah Ademi &amp; Yusuf Akbulut" />
+    <meta name="date" content="2021-05-07" />
+    <script src="libs/header-attrs/header-attrs.js"></script>
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+    <link href="libs/tile-view/tile-view.css" rel="stylesheet" />
+    <script src="libs/tile-view/tile-view.js"></script>
+    <script src="libs/mark.js/mark.min.js"></script>
+    <link href="libs/xaringanExtra-search/search.css" rel="stylesheet" />
+    <script src="libs/xaringanExtra-search/search.js"></script>
+    <script>window.addEventListener('load', function() { window.xeSearch = new RemarkSearch({"position":"bottom-left","caseSensitive":false,"showIcon":true,"autoSearch":true}) })</script>
+    <script src="libs/fabric/fabric.min.js"></script>
+    <link href="libs/xaringanExtra-scribble/scribble.css" rel="stylesheet" />
+    <script src="libs/xaringanExtra-scribble/scribble.js"></script>
+    <script>document.addEventListener('DOMContentLoaded', function() { window.xeScribble = new Scribble({"pen_color":["#FF0000"],"pen_size":3,"eraser_size":30,"palette":[]}) })</script>
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Trump and Biden Tweet Analysis
+## for İTÜ Project
+### Ubeydullah Ademi &amp; Yusuf Akbulut
+### Boğaziçi University &amp; Marmara University
+### 05/07/2021
+
+---
+
+
+
+
+Here are the packages we used in this study:
+
+
+```r
+library(tm)
+library(qdap) 
+library(wordcloud)
+library(viridisLite)
+library(plotrix)
+library(qdap)
+library(tidyverse)
+library(tidytext)
+library(magrittr)
+library(metricsgraphics)
+library(ggthemes)
+library(dplyr)
+library(ggplot2)
+library(tibbletime)
+library(topicmodels)
+library(furrr)
+library(stm)
+```
+
+
+
+---
+background-image: url(https://deadline.com/wp-content/uploads/2020/10/Trump-Biden-Twitter.jpg?w=681&amp;h=383&amp;crop=1)
+
+.footnote[
+[1] image from AP]
+
+---
+class: inverse, center, middle
+
+# We have witnessed tweet wars between two candidates for being the most powerful person in the world.
+
+---
+class: inverse, center, middle
+
+# In this analysis, we have traced the patterns of this war. 
+
+---
+
+# Our main tool for this analysis is **R**. It has necessary packages needed for the task.
+
+--
+
+## Here are the types of analysis we made on the data:
+
+--
+
+1. Data Cleaning and Preperation
+
+2. Descriptive Analysis
+
+3. Visualisation - Word Networks
+
+4. Topic Modelling
+
+5. Sentiment Analysis
+
+
+
+---
+class: inverse, center, middle
+
+# 1. Data Gathering and Preperation
+
+---
+
+
+
+We are insterested in past data so because of the twitter API limitations we worked on previously gathered data on [Kaggle.com](https://kaggle.com) downloaded as _.csv_ files.
+
+
+```r
+biden_tw &lt;- read.csv("../archive/JoeBidenTweets.csv")
+trump_tw &lt;- read.csv("../archive/realdonaldtrump.csv")
+```
+
+--
+
+We have limited the scope of the study to the tweets sent in campain period
+
+
+```r
+biden_cptw &lt;- filter(biden_tw, timestamp &gt;= "2019-04-25 10:00")
+trump_cptw &lt;- filter(trump_tw, date &gt;= "2019-06-18 00:10:06")
+```
+
+
+--
+
+There is also necessary cleaning progess we turned into a function called **cleancorpus** 
+
+
+```r
+clean_corpus &lt;- function(corpus){
+  corpus &lt;- tm_map(corpus, content_transformer(replace_abbreviation))
+  corpus &lt;- tm_map(corpus, removeNumbers)
+  corpus &lt;- tm_map(corpus, content_transformer(strip), char.keep="#")
+  corpus &lt;- tm_map(corpus, removeWords, c(stopwords("en")))
+  corpus &lt;- tm_map(corpus, content_transformer(tolower))
+  corpus &lt;- tm_map(corpus, stripWhitespace)
+  return(corpus)
+}
+```
+
+---
+
+The type of analysis needs a special form of text which is called corpus and its transformed matrices. We made some transformations to get that for.
+
+`Import -&gt; Clean -&gt; Filter -&gt; Vectorise -&gt; Corpus -&gt; Term Document Matrix -&gt; Document Term Matrix`
+
+We have used 
+
+
+```r
+biden_tweets &lt;- biden_cptw$tweet
+trump_tweets &lt;- trump_cptw$content
+
+# Make a vector source
+biden_source &lt;- VectorSource(biden_tweets)
+trump_source &lt;- VectorSource(trump_tweets)
+
+biden_corpus &lt;- VCorpus(biden_source)
+trump_corpus &lt;- VCorpus(trump_source)
+
+# Create a Term Document Matrix out of our cleaned data and convert it to a Matrix
+
+biden_corpuscl &lt;- clean_corpus(biden_corpus)
+trump_corpuscl &lt;- clean_corpus(trump_corpus)
+
+biden_tdm &lt;- TermDocumentMatrix(biden_corpuscl)
+trump_tdm &lt;- TermDocumentMatrix(trump_corpuscl)
+
+biden_m &lt;- as.matrix(biden_tdm)
+trump_m &lt;- as.matrix(trump_tdm)
+
+biden_dtm &lt;- DocumentTermMatrix(biden_corpuscl)
+trump_dtm &lt;- DocumentTermMatrix(trump_corpuscl)
+
+biden_m2 &lt;- as.matrix(biden_dtm)
+trump_m2 &lt;- as.matrix(trump_dtm)
+```
+
+
+---
+
+class: inverse, center, middle
+
+# 2. Descriptive Analysis
+
+---
+
+In this first section we made some descriptive analysis before going deep. we calculated polarity score for Biden and Trump.
+
+
+```r
+# Calculate the row sums of biden_m
+term_frequency_biden &lt;- rowSums(biden_m)
+term_frequency_trump &lt;- rowSums(trump_m)
+
+# Sort term_frequency in decreasing order
+term_frequency_biden &lt;- sort(term_frequency_biden, decreasing = TRUE)
+term_frequency_trump &lt;- sort(term_frequency_trump, decreasing = TRUE)
+```
+
+---
+
+
+```r
+# Plot a barchart of the 10 most common words
+b &lt;- term_frequency_biden[1:10]
+barplot(b, col = "tan", las = 2)
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-19-1.svg)&lt;!-- --&gt;
+
+---
+
+
+```r
+# Plot a barchart of the 10 most common words
+a &lt;- term_frequency_trump[1:10]
+barplot(a, col = "tan", las = 2)
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-20-1.svg)&lt;!-- --&gt;
+
+
+---
+
+class: inverse, center, middle
+
+# 3. Visualisations
+
+---
+
+Word cloud of most used by candidates
+
+
+
+```r
+# Vector of terms
+terms_vec_trump &lt;- names(term_frequency_trump)
+
+# Create a wordcloud for the values in word_freqs
+wordcloud(terms_vec_trump, term_frequency_trump, 
+          max.words = 50, colors = "red")
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-21-1.svg)&lt;!-- --&gt;
+
+---
+
+
+```r
+# Vector of terms
+terms_vec_biden &lt;- names(term_frequency_biden)
+View(terms_vec_biden)
+
+# Create a wordcloud for the values in word_freqs
+wordcloud(terms_vec_biden, term_frequency_biden, 
+          max.words = 50, colors = "blue")
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-22-1.svg)&lt;!-- --&gt;
+
+---
+
+There is also another visualisation compares two in the same plot
+
+
+
+```r
+# Analyzing Common Words btw Trump &amp; Biden with commonality cloud 
+all_trump &lt;- paste(trump_tweets, collapse = " ")
+all_biden &lt;- paste(biden_tweets, collapse = " ")
+
+# Create all_tweets
+all_tweets &lt;- c(all_trump, all_biden)
+
+# Convert to a vector source
+all_tweets &lt;- VectorSource(all_tweets)
+
+# Create all_corpus
+all_corpus &lt;- VCorpus(all_tweets)
+
+# Clean the corpus
+all_clean &lt;- clean_corpus(all_corpus)
+
+# Create all_tdm
+all_tdm &lt;- TermDocumentMatrix(all_clean)
+
+# Create all_m
+all_m &lt;- as.matrix(all_tdm)
+```
+
+---
+
+Here is the commanality cloud of two candidates:
+
+
+```r
+# Print a commonality cloud
+commonality.cloud(all_m, max.words = 100, colors = "steelblue1")
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-24-1.svg)&lt;!-- --&gt;
+
+---
+
+Here is the comparison cloud:
+
+
+```r
+# Give the columns distinct names
+colnames(all_tdm) &lt;- c("Trump", "Biden")
+
+# Create all_m
+all_m &lt;- as.matrix(all_tdm)
+
+# Create comparison cloud
+comparison.cloud(all_m, colors = c("red", "blue"), max.words = 50)
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-25-1.svg)&lt;!-- --&gt;
+
+---
+
+In this plot we made another comparison of most used words in Biden and Trumps tweets
+
+
+```r
+top25_df &lt;- all_m %&gt;%
+# Convert to data frame
+as_tibble(rownames = "word") %&gt;%
+# Keep rows where word appears everywhere
+filter_all(all_vars(. &gt; 0)) %&gt;% 
+# Get difference in counts
+mutate(difference = Biden - Trump) %&gt;%
+# Keep rows with biggest difference
+top_n(25, wt = difference) %&gt;% 
+# Arrange by descending difference
+arrange(desc(difference))
+```
+
+
+---
+
+
+```r
+# Draw the Pyramid Plot
+pyramid.plot(
+  top25_df$Biden,
+  top25_df$Trump,
+  labels = top25_df$word,
+  top.labels = c("Biden", "Words", "Trump"),
+  main = "Words in Common",
+  unit = NULL,
+  gap = 8,
+)
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-27-1.svg)&lt;!-- --&gt;
+
+```
+## 1383 1383
+```
+
+```
+## [1] 5.1 4.1 4.1 2.1
+```
+---
+Our Last Visualistion is about the world networks:
+
+# ???
+
+
+```r
+# Add “donald” and “president” to the list: new_stops
+new_stops &lt;- c("donald", "my", "along", "and", "president", stopwords("en"))
+
+# Remove stop words from text
+biden_tweets_nt &lt;- removeWords(biden_tweets, new_stops)
+
+
+# Word association
+word_associate(biden_tweets_nt[1:999], match.string = "Trump", 
+               network.plot = TRUE, cloud.colors = c("gray85", "darkred"))
+```
+
+```
+##     row group unit                         text                                                                                                                                                                                                                                                       ...
+## 1   107   all  107 Trump doesnâ\200\231t understand struggles working folks go . He doesnâ\200\231t understand itâ\200\231s like worry will lose roof head. He doesnâ\200\231t understand itâ\200\231s like wonder youâ\200\231ll able put food table.                                                                                       
+## 2   108   all  108 Yesterday, Trump tried attack campaign rally saying I abandoned Pennsylvania. Iâ\200\231ve never forgotten I came . My family leave Pennsylvania I 10 â\200” moved Delaware Dad found job provide family.                                                                                      
+## 3   122   all  122 Everybody knows Donald Trump , let know . We choose hope fear. Truth lies. And unity division. https://t.co/X2eLN3xe7M                                                                                                                                                                
+## 4   140   all  140 Every day, weâ\200\231re witnessing Trump Administration attack hard fought progress made LGBTQ community. We go backwards. It's us stand injustices. I'm looking forward joining @HRC tomorrow talk work remains. https://t.co/3LaNNrlQ6r                                                  
+## 5   151   all  151 Today, President Trump denies evidence front eyes, hides climate science produced administration, actively works roll back progress already made. Itâ\200\231s reckless, itâ\200\231s irresponsible, itâ\200\231s unacceptable. https://t.co/3r9TqKKqGQ                                                 
+## 6   165   all  165 We canâ\200\231t afford four years President Trump attacking progress weâ\200\231ve made climate change. On day one , Iâ\200\231ll take bold action necessary tackle crisis head . https://t.co/PTXHzn1PXM                                                                                              
+## 7   189   all  189 President Trumpâ\200\231s decision abandon #ParisAgreement just recklessâ\200” abdicated leadership world stage threatened future planet. On day one, Iâ\200\231ll rejoin Agreement rally world push progress . https://t.co/0Wxk0RIYvs                                                              
+## 8   193   all  193 When comes President Trumpâ\200\231s tariff war China, one thing clear: Americaâ\200\231s farmers manufacturers getting crushed â\200“ one knows better Iowa. To Trump, people getting hurt just pawns game. #TeamJoe                                                                                
+## 9   195   all  195 He thinks heâ\200\231s tough. Well, itâ\200\231s easy tough someone else feeling pain. How many farmers across Iowa across nation facing prospect losing business, losing farm Trumpâ\200\231s tariffs? #TeamJoe                                                                                        
+## 10  196   all  196 Trump doesnâ\200\231t get basics. He thinks tariffs paid China. Any freshman econ student tell American people paying tariffs. The cashiers Target see whatâ\200\231s going â\200“ know economics Trump. #TeamJoe                                                                                    
+## 11  200   all  200 President Trump bringing secret one page agreement Mexico Iowa. The Iowans crushed tariffs like see .                                                                                                                                                                                 
+## 12  202   all  202 President Trump thinks tariffs paid China. Just like thinks Mexico building wall.                                                                                                                                                                                                     
+## 13  208   all  208 President Trump welcoming foreign interference elections. This isnâ\200\231t politics. It threat national security. An American President seek aid abet seek undermine democracy.                                                                                                           
+## 14  212   all  212 Donald Trump doesnâ\200\231t think matters candidates accept damaging intel opponent foreign government. Heâ\200\231s dead wrong. Thatâ\200\231s Iâ\200\231m signing Pledge Election Integrity. I refuse help seek undermine democracy. https://t.co/Zw7DKYXc1h https://t.co/3NGezt58hx                       
+## 15  219   all  219 7 years ago, @BarackObama I offered security DREAMers, young people brought kids know America home. Trump trying break country's promise &amp;amp; continues threaten status. DREAMers Americans. Itâ\200\231s time kept word .                                                                 
+## 16  229   all  229 Under President Trumpâ\200\231s policies, four-month-old separated family border. Itâ\200\231s unconscionable fundamentally odds everything nation stands . America better . https://t.co/hQY3xISf7r                                                                                              
+## 17  235   all  235 Hey - @TeamJoe . President Trump dismisses everything doesnâ\200\231t want hear â\200œFAKE NEWSâ\200\235 -- announces re-election, want make sure real facts record:                                                                                                                                 
+## 18  236   all  236 Letâ\200\231s clear: President Trump inherited growing economy Obama-Biden administration. And now, heâ\200\231s process squandering .                                                                                                                                                            
+## 19  237   all  237 Just look tax plan. As , Biden will reverse Trumpâ\200\231s tax cuts super wealthy. Itâ\200\231s time reward work, just wealth. https://t.co/byDWQAumwg                                                                                                                                           
+## 20  238   all  238 Trump continues undermine standing world. Our core values inclusivity, diversity, respect rule law, freedom speech, freedom press, freedom religion attack home abroad.                                                                                                               
+## 21  239   all  239 Trumpâ\200\231s response Charlottesville two years ago abhorrent, itâ\200\231s just . Itâ\200\231s happening every day. Separating children parents border. Attacking women's rights. Rolling back LGBTQ protections. Weâ\200\231re better .                                                                  
+## 22  240   all  240 This truly important election lifetime. If want defeat Donald Trump, itâ\200\231s going take everyone stepping , speaking , taking action. Join team today letâ\200\231s get work: https://t.co/gnaFCACYrW                                                                                        
+## 23  241   all  241 Trumpâ\200\231s policies appear intentionally designed aggravate situation scare Americans re-electing . Cutting aid Central America will increase migration Southern border, reduce .                                                                                                      
+## 24  242   all  242 President Trump threatening mass deportation immigrants cruel un-American. We can fix broken immigration system enforce laws without tossing aside values. https://t.co/0NE6CitDKM                                                                                                    
+## 25  245   all  245 President Trump's Iran strategy self-inflicted disaster. Two America's vital interests Middle East preventing Iran obtaining nuclear weapon securing stable energy supply Strait Hormuz. Trump failing counts.                                                                        
+## 26  246   all  246 He unilaterally withdrew hard-won nuclear agreement Obama-Biden Administration negotiated stop Iran getting nuclear weapon. Trump promised abandoning deal imposing sanctions stop Iranâ\200\231s aggression region.                                                                        
+## 27  247   all  247 But theyâ\200\231ve gotten aggressive. Trump also promised walking away somehow lead better deal â\200“ instead, predictable happened: Iran building back nuclear capability.                                                                                                                  
+## 28  248   all  248 Itâ\200\231s sadly ironic State Department now calling Iran abide deal Trump Administration abandoned. By walking away diplomacy, Trump made military conflict likely. Another war Middle East last thing need.                                                                             
+## 29  254   all  254 President Trump continues deny scientific evidence front eyes attack progress weâ\200\231ve made climate change. Itâ\200\231s unacceptable. In Biden Administration, weâ\200\231ll turbocharge efforts achieve 100% clean energy economy. https://t.co/6WLinHjje2                                       
+## 30  258   all  258 Trumpâ\200\231s erratic, impulsive actions last thing need Commander--Chief. No order military strike without fully understanding consequences. We donâ\200\231t need another war Middle East, Trumpâ\200\231s actions toward Iran make likely.                                                         
+## 31  259   all  259 The Trump Administration arguing 9th Circuit migrant children held detention centers without soap, toothbrushes beds conditions â\200œsafe sanitaryâ\200\235. Itâ\200\231s - assault human dignity standards nation. We must better.                                                                 
+## 32  261   all  261 Itâ\200\231s clear Trump interested using policies assault dignity Hispanic community scare voters turn Election Day, addressing real challenges facing hemisphere. Read full op-ed : https://t.co/9dl3ADpBf3                                                                               
+## 33  262   all  262 Trump sÃ³lo estÃ¡ interesado en polÃ­ticas que atacan la dignidad de la comunidad Latina y asustan los votantes para que se presenten en las urnas el dÃ­ de las elecciones, sin interÃ©s por abordar los desafÃ­os reales que enfrenta nuestro hemisferio. https://t.co/YEXsBZizKK   
+## 34  271   all  271 One year ago, Supreme Court upheld Trump's Muslim banâ\200”one administration's egregious attacks core values. Wielding politics fear intolerance slandering entire religious communities complicit terrorism wrong, itâ\200\231s .                                                            
+## 35  272   all  272 This image gut-wrenching. The cruelty seeing border unconscionable. History will judge respond Trump Administrationâ\200\231s treatment immigrant families &amp;amp; childrenâ\200” canâ\200\231t silent. This . This America.https://t.co/ZeMBmwUHxU                                                    
+## 36  274   all  274 I proud sign @IndivisibleTeamâ\200\231s pledge. Our large diverse set qualified Democratic candidates evidence strength party, I committed supporting whomever becomes nominee. The important thing beat Donald Trump. Period. https://t.co/KiBiOOZpDm                                      
+## 37  275   all  275 Today Supreme Court refused stop politicians rigging democracy writing election rules benefit. It couldnâ\200\231t happened without Justices put Donald Trump Republicans â\200” another reason Democrats must take back White House 2020.                                                     
+## 38  277   all  277 Make mistake, Trump Administration added citizenship question Census deliberately cut voices immigrants communities color. Itâ\200\231s wrong goes core values nation.                                                                                                                      
+## 39  284   all  284 The poor getting poorer bottom falling middle class. Income inequality rise â\200” made worse Trump tax cut giant give-away super-wealthy.                                                                                                                                               
+## 40  285   all  285 Itâ\200\231s time reward work, just wealth. On day one, Iâ\200\231ll move : eliminate Trump tax cut super-wealthy, cut unjustified loopholes tax code, use money invest Americaâ\200\231s future.                                                                                                       
+## 41  292   all  292 Iâ\200\231m take debate stage. The large, diverse Democratic field evidence party's strength. And , agree need make Donald Trump one-term . #DemDebate                                                                                                                                      
+## 42  311   all  311 We know NATO will fall apart Donald Trump elected four years. Itâ\200\231s single consequential alliance history United States. #DemDebate https://t.co/SL2Mq9k161                                                                                                                          
+## 43  325   all  325 If want make Donald Trump one-term , itâ\200\231s going take everyone stepping pitching can. Will make donation big public fundraising deadline tonight? https://t.co/BWLrzM9AE6                                                                                                            
+## 44  326   all  326 President Trumpâ\200\231s failure lead climate crisis inexcusable â\200” endangers future country planet. As , Iâ\200\231ll rejoin #ParisAgreement rally world push progress faster. https://t.co/CSABVSltRW                                                                                         
+## 45  327   all  327 Yet , Donald Trump demonstrated concerned photo op getting results American people. He repeatedly elevated Kim Jong Un â\200” murderous tyrant â\200” international stage exchange almost nothing.                                                                                          
+## 46  328   all  328 In case, Trump achieved mere promise restart working-level negotiations â\200” negotiations never ended.                                                                                                                                                                                 
+## 47  331   all  331 And even Trump rushed legitimize dictator North Korea dozens nuclear weapons, trashed Iran nuclear deal â\200” deal working keep Iran far away single nuclear bomb.                                                                                                                      
+## 48  332   all  332 Iran needs get back compliance nuclear commitments, Trump appears plan ensuring result either. His policy maximum pressure produced worse minimum results.                                                                                                                            
+## 49  333   all  333 Iran now restarted nuclear program become , rather less, aggressive. Trump's Iran policy alienated us allies taken us brink another war Middle East. Everything backwards.                                                                                                            
+## 50  334   all  334 Income inequality rise â\200” made worse Trump tax cut giant giveaway super-wealthy. Weâ\200\231ve got rebuild backbone country â\200” middle class. That starts rewarding work, just wealth.                                                                                                     
+## 51  338   all  338 The Department Commerce just announced 2020 Census will President Trumpâ\200\231s citizenship question. This victory immigrants Latinos, Americans. Everyone deserves counted voices heard without fear.                                                                                    
+## 52  346   all  346 El Departamento de Comercio anunciÃ³ que el formulario Censo 2020 tendrÃ¡ la pregunta de ciudadanÃ­ de Trump. Esto es solo una victoria para los inmigrantes y latinos, sino para todos los estadounidenses. Todos merecemos ser contados sin temor!                                  
+## 53  349   all  349 DREAMersâ\200”young people came U.S. childrenâ\200” Americans. They donâ\200\231t deserve sit limbo Supreme Court decides whether President Trump can end Obama-Biden DACA policy. Congress act now give path citizenship. https://t.co/4teULJvgki                                                
+## 54  355   all  355 Itâ\200\231s enough way Donald Trump conducts â\200” way assaults dignity women, people color, immigrants.                                                                                                                                                                                     
+## 55  361   all  361 But must also remember, JFK put , â\200œ individual liberty one indivisible liberty .â\200\235 Donald Trump doesnâ\200\231t get .                                                                                                                                                                    
+## 56  362   all  362 What will Donald Trump say evening speaks nation event designed stroke ego celebrate American ideals? Will speak example America must set inspire world?                                                                                                                              
+## 57  363   all  363 Will offer robust defense democratic values always strength times crisis? We know answer . Donald Trump incapable celebrating makes America great doesnâ\200\231t get .                                                                                                                     
+## 58  379   all  379 If defeat Donald Trump, character nation will fundamentally forever altered. https://t.co/ZgULt8Y47v                                                                                                                                                                                  
+## 59  383   all  383 His leadership House Intelligence Committee influential voice pushing Trump Administration secure elections helped make clear stakes country next year's election.                                                                                                                    
+## 60  394   all  394 President Trump can avoid talking climate change wants, doesnâ\200\231t change fact real, , requires urgent action. We afford four years climate change denier White House. https://t.co/iI3P17wRlE                                                                                         
+## 61  397   all  397 Embracing dictators. Threatening war. Embarrassing United States. Thatâ\200\231s #TrumpDoctrine. Reclaiming American leadership starts now. https://t.co/8BQv50aseA                                                                                                                         
+## 62  404   all  404 We one opportunity reset democracy Trumpâ\200” prepared make . First, must repair reinvigorate democracy. https://t.co/02G73Q45dr                                                                                                                                                        
+## 63  405   all  405 The threat Donald Trump poses national security, country, extreme afford ignore . His erratic policies failures uphold basic democratic principles muddied reputation place world.                                                                                                    
+## 64  411   all  411 The threat Donald Trump poses national security â\200” country â\200” extreme afford ignore . https://t.co/UGP4EN1PMw                                                                                                                                                                       
+## 65  418   all  418 President Trumpâ\200\231s ICE raids inhumane. His scare tactics solve nothing. We terrorizing communities splitting families. We provide pathway citizenship find lasting solution.                                                                                                         
+## 66  420   all  420 Las redadas de inmigraciÃ³n (ICE) del presidente Trump son inhumanas. Sus tÃ¡cticas resuelven nada. No deberÃ­amos estar aterrorizando comunidades y dividiendo familias. Debemos proporcionar un camino hacia la ciudadanÃ­ y encontrar una soluciÃ³n duradera.                      
+## 67  422   all  422 Americaâ\200\231s strength always rooted diversity. But President Trump continues spew hateful rhetoric, sow division, stoke racial tensions political gain. Let's clear: Racism xenophobia place America. https://t.co/Gtcx96uZhd                                                          
+## 68  438   all  438 President Trumpâ\200\231s entire re-election strategy based fear hatred migrants â\200” just latest example. We can enforce immigration laws dignity â\200” fix asylum system fair need protection deters .                                                                                       
+## 69  439   all  439 Our Statue Liberty invites tired, poor, huddled masses yearning breathe free. Now President Trump wants slam door face children families fleeing war, poverty, violence. Itâ\200\231s cruel. Itâ\200\231s . https://t.co/luIZlx1UcZ                                                               
+## 70  451   all  451 Weâ\200\231ve heard throughout history, place America 2019. Itâ\200\231s clear Donald Trump trying divide us race gender. Itâ\200\231s immoral. Our children listening.                                                                                                                                 
+## 71  452   all  452 Donald Trump thinks nation's great diversity makes us weak â\200” idea makes us great.                                                                                                                                                                                                   
+## 72  466   all  466 In America, health care right â\200” privilege wealthy . As , Iâ\200\231ll repeal President Trumpâ\200\231s tax cuts super wealthy close capital gains loopholes help ensure everyone access care deserve. https://t.co/URjgZONjmL                                                                   
+## 73  468   all  468 President Trumpâ\200\231s comments week despicable. https://t.co/fOPHDDr1S4                                                                                                                                                                                                                 
+## 74  481   all  481 I know come together nothing canâ\200\231t . That gives strength know can defeat Donald Trump put nation path towards dignity decency justice. https://t.co/WpJat7FcIV                                                                                                                      
+## 75  489   all  489 Trumpâ\200\231s continued racist attacks members Congress tolerated excused. This . We must hold accountable words.                                                                                                                                                                         
+## 76  491   all  491 Trumpâ\200\231s words actions damaging place world futures. We nation founded diversity opportunity everyone. Iâ\200\231m running President need fight back incredible abuses power weâ\200\231re seeing. https://t.co/YNdTZMlqeP                                                                       
+## 77  515   all  515 Let's call Trumpâ\200\231s travel ban : disgrace. We nation immigrants, need leader recognizes diversity greatest asset. https://t.co/YLkEI4xHb2                                                                                                                                            
+## 78  516   all  516 Trumpâ\200\231s tariff war China crushing American farmers. It's easy talk tough someone else feels pain. We need tough AND smartâ\200”working allies curb Chinaâ\200\231s abusive trade practices, isolating us closest partners. https://t.co/pY75vyEFn3                                           
+## 79  517   all  517 Trump fighting tooth &amp;amp; nail deny fleeing dangerous situations right seek asylum nation. We uphold moral responsibility &amp;amp; enforce immigration laws dignityâ\200” turn away fleeing violence, war, &amp;amp; poverty. https://t.co/1CVPP3sJo3                                          
+## 80  526   all  526 A border wall physical embodiment @realDonaldTrumpâ\200\231s inability develop effective immigration policy. His use Department Defense funds wall phony answer real challenges faceâ\200” knows . https://t.co/JAhysdhNd8                                                                     
+## 81  529   all  529 Trumpâ\200\231s trade wars squeezing American farmers. In states like South Dakotaâ\200” agriculture top industryâ\200”effects go well beyond farms. As , I'd join together allies &amp;amp; stand China ensure policies work farmers.https://t.co/CEm0IRZIg0                                         
+## 82  539   all  539 .@TheRevAl champion fight civil rights. The fact President Trump continues use power presidency unleash racist attacks people serves despicable. This hate place country. It's beneath dignity office.                                                                                
+## 83  542   all  542 Two years ago, President Trump gave giant tax cuts super-wealthy corporations. Now, wants rip free school lunches away kids need help . Itâ\200\231s heartless. No kid go hungry America. https://t.co/TybdVnFjLH                                                                           
+## 84  543   all  543 President Trump failed promises American workers time time . We need rebuild middle class, time make sure everybody comes â\200” regardless race, gender, religion, sexual orientation, disability. https://t.co/Df7rHBCzLp                                                              
+## 85  547   all  547 President Trump &amp;amp; Betsy DeVos continue roll back progress LGBTQ rights. No child feel unsafe school sexual orientation gender identity. A Biden administration will ensure young people affirmed &amp;amp; accepted exactly . https://t.co/P9j6zoCFwz                                 
+## 86  551   all  551 Here's deal, President Trump inherited economy Obama-Biden Administration. And just like everything else given life, process squandering . https://t.co/nSAOKwysmM                                                                                                                    
+## 87  561   all  561 Healthcare important issue Americans. Senator Harris able beat Trump double-talk healthcare. We plan builds ACA giving Americans choice, reducing health care costs, making health care system easier navigate.                                                                       
+## 88  569   all  569 Donald Trump problem immigration policy. He's using family separation weapon desperate people seeking safety better life. We need defeat Donald Trump. #DemDebate                                                                                                                     
+## 89  570   all  570 Trump's immigration policies assault human dignity. We country denies children soap toothbrush. This . #DemDebate                                                                                                                                                                     
+## 90  571   all  571 Las polÃ­ticas de inmigraciÃ³n de Trump son un asalto la dignidad humana. No somos un paÃ­s que niegue los niÃ±os jabÃ³n y cepillo de dientes. Esto es lo que somos. #DemDebate                                                                                                       
+## 91  594   all  594 Everybody knows Donald Trump . We let know . We choose science fiction, hope fear, unity division. #DemDebate https://t.co/6sX9jZ1GGr                                                                                                                                                 
+## 92  596   all  596 Last night debate stage, I shared bold vision future country. Everyone knows Donald Trump . Letâ\200\231s show . Thereâ\200\231s nothing canâ\200\231t â\200” together. #DemDebate https://t.co/gA2dYbUD05                                                                                                 
+## 93  597   all  597 The ACLU says Trump Administration continued rip children parents, even courts ordered stop. Itâ\200\231s inhumane &amp;amp; goes everything stand nation immigrants &amp;amp; values. Iâ\200\231ll end cruel policies. https://t.co/LLbO0zp4H2                                                           
+## 94  604   all  604 Yet proof Trump doesnâ\200\231t care farmers, workers, consumers crushed irresponsible tariff war China. Itâ\200\231s easy act tough someone else feeling pain. I will reverse senseless policies. https://t.co/8XrVcUjUB5                                                                        
+## 95  606   all  606 Donald Trump echoing authoritarian heroes, againâ\200” time using China's anti-democracy talking points describe peaceful protests Hong Kong "riots." It's shameful. When people suffering oppression look U.S. hope, Trump nothing offer.                                               
+## 96  607   all  607 In last three years, President Trump turned world upside internationally economically. People hurting. The soul country collapsing presidency. We honest, straight forward, authentic will fix .                                                                                      
+## 97  608   all  608 Itâ\200\231s clear climate change already . Today. And need take urgent action address . That starts beating Donald Trump. https://t.co/G5m7S6jpPS                                                                                                                                          
+## 98  614   all  614 We canâ\200\231t fix problem refuse name : white nationalism. An ideology emboldened stokes flames hatred coddles white supremacists messages support. We must Trump : condemn evil eradicate society.                                                                                      
+## 99  630   all  630 The words matter. They can move markets. They can send brave men women war. They can bring peace. And can unleash deepest, darkest forces nation â\200” like Donald Trump chosen .                                                                                                       
+## 100 633   all  633 How far Trumpâ\200\231s saying â\200œ invasionâ\200\235 shooter El Paso declaring â\200œ attack response Hispanic invasion Texasâ\200\235? Not far .                                                                                                                                                          
+## 101 634   all  634 How far white supremacists Neo-Nazis Charlottesville â\200“ Trumpâ\200\231s â\200œ fine peopleâ\200\235 â\200“ chanting â\200œYou will replace usâ\200\235 shooter Tree Life synagogue Pittsburgh saying Jews â\200œ committing genocide people.â\200\235 Not far .                                                          
+## 102 636   all  636 I wish I say hate began Trump will end . It didnâ\200\231t &amp;amp; wonâ\200\231t. The battle soul nation constant push--pull American ideal created equal &amp;amp; harsh reality racism long torn us apart.                                                                                            
+## 103 639   all  639 Trump offers moral leadership, interest unifying nation, evidence presidency awakened conscience least. Instead, toxic tongue unapologetically embraced political strategy hate, racism, division.                                                                                    
+## 104 644   all  644 In clear language code, President Trump fanned flames white supremacy nation. https://t.co/UoiiMVrCW7                                                                                                                                                                                 
+## 105 646   all  646 On day President Trump supposed embracing grieving community celebrating American diversity El Paso, administration instead stoking fear conducting massive immigration raids Mississippi. He morally unfit lead country. https://t.co/R7q41zefPu                                     
+## 106 648   all  648 This Donald Trump : determined terrorize immigrant communities rip apart families â\200” border across country. The question , ? I believe nation will end cruel policies make Trump one-term . https://t.co/u7DA2Fnr5l                                                                  
+## 107 655   all  655 We need gun safety reform &amp;amp; leaders will step get done. Gov. Sununu instead decided stand President Trump putting gun lobby common-sense reforms will keep Granite Staters safe. As , Iâ\200\231ll take NRA &amp;amp; winâ\200”. #NHPolitics                                                   
+## 108 671   all  671 For decades, Endangered Species Act protected vulnerable wildlife extinction. Now, President Trump wants throw away. At time climate change pushing planet brink, strengthen protections â\200” weaken . https://t.co/64O12QaWwM                                                         
+## 109 677   all  677 This America, strong great diversity â\200” spite . Donald Trump doesnâ\200\231t get . Prioritizing wealthy immigrants punishing working-class ones betrays American idea everyone gets fair shot â\200” regardless background. https://t.co/NY0gYKbm9L                                           
+## 110 678   all  678 President Trump emboldened white nationalists messages support, called Mexicans "rapists," told members Congress "go back" came . The words matter. And Trump used unleash deepest, darkest forces nation.                                                                            
+## 111 680   all  680 America idea. An idea centuries offered hope tired, poor, huddled masses yearning breathe free. We wonâ\200\231t let Donald Trump administration change . https://t.co/HMjXf0ak2A                                                                                                           
+## 112 685   all  685 Gov. @Hickenlooper ran strong campaign, talking urgent need rebuild middle class standing President Trump's trade wars. Coloradans lucky John corner, I look forward seeing next.                                                                                                     
+## 113 692   all  692 Every day President Trump proves morally unfit sit Oval Office. A bring best Americans â\200” echo schoolyard bullies taunts based physical appearance. https://t.co/TKfog6NMNz                                                                                                          
+## 114 693   all  693 President Trump lied Iowa farmers every turn. He promised â\200\230unleash ethanolâ\200\231 instead heâ\200\231s done secretly unleash Big Oil renewable fuel obligations. I'll support farmersâ\200” sell highest bidder. https://t.co/eTKRnOFjhr                                                         
+## 115 699   all  699 The Trump Administration trying eliminate protections LGBTQ workers President Obama I put place. Itâ\200\231s wrong. As , Iâ\200\231ll ensure every American treated dignity respectâ\200”regardless love. https://t.co/Ubiy2kIKag                                                                   
+## 116 706   all  706 The Trump Administrationâ\200\231s Title X rule direct attack Planned Parenthood crucial services organization provides. Access health care taken away millions women. Itâ\200\231s wrong, I will reverse . https://t.co/6aOXjvwjMK                                                               
+## 117 707   all  707 We will make Donald Trump one-term .                                                                                                                                                                                                                                                  
+## 118 708   all  708 We know bones election different. The stakes higher. The threat serious. We beat Donald Trump. Thatâ\200\231s message lay first TV ad hitting airwaves today. Watch : https://t.co/5y3l3qXNSg                                                                                               
+## 119 709   all  709 Our teachers firefighters pay higher tax rate Wall Street CEOs. Thatâ\200\231s Iâ\200\231ll repeal President Trumpâ\200\231s tax cuts super-wealthy close capital gains loopholes. Itâ\200\231s time reward work, just wealth.                                                                                
+## 120 710   all  710 The Trump Administration argued migrant children held detention centers donâ\200\231t need soap, toothbrushes, beds. Now theyâ\200\231re refusing provide flu vaccines three children already passed away part flu. It inhumane. https://t.co/d34DtefyHL                                          
+## 121 713   all  713 Once , President Trump folded @NRA broken promise pursue modest gun safety policies. I give word Biden: I wonâ\200\231t rest pass universal background checks ban assault weapons. We will end gun violence epidemic. https://t.co/4Q6xFrCY29                                               
+## 122 714   all  714 Donald Trump inherited growing economy Obama-Biden Administration â\200” just like inherited everything life. Now, heâ\200\231s process squandering . https://t.co/A6IXfVSFRx                                                                                                                  
+## 123 720   all  720 On day one, I will eliminate President Trumpâ\200\231s decision limit asylum undo executive orders eliminated Obama-Biden enforcement priorities national security public safety.                                                                                                           
+## 124 727   all  727 President Trump just get â\200” claimed tax cuts jolted economy spurred hiring. He wrong. Iâ\200\231ll reverse giveaway super-wealthy invest rebuilding America's middle class instead. https://t.co/t5BGWhgIim                                                                                
+## 125 728   all  728 We need take action now address climate crisis. That starts beating Donald Trump.                                                                                                                                                                                                     
+## 126 730   all  730 President Trump continues chip away progress made Obama-Biden Administration. This time, heâ\200\231s going rules put place decrease vehicle emissions. It's backwards. We need believes climate change. https://t.co/9P60x0HEwV                                                            
+## 127 732   all  732 .@SethMoulton brought vital voice primary, advocating urgent need undo President Trumpâ\200\231s damage abroad restore American leadership world stage. His passion knowledge American foreign policy impressive needed Congress.                                                           
+## 128 762   all  762 When comes meeting existential crisis time, Trump walked away table â\200” literally. If give Trump four years, planet may never recover utter disregard climate crisis scientific fact.                                                                                                 
+## 129 763   all  763 The distance Trump put U.S. rest world issues matter Americans clear. There telling metaphor administration's abdication American leadership empty chair G-7 climate meeting.                                                                                                         
+## 130 764   all  764 After three days, even evidence President Trump's disastrous foreign policy left U.S. isolated. Rather looking America vision, closest democratic allies sought manage mitigate damage Trump might year's G-7.                                                                        
+## 131 765   all  765 Today, launching #StudentsForBiden, nationwide program change-makers committed organizing campuses making Donald Trump one-term . If sounds like , join today get work: https://t.co/nWF914sJFc https://t.co/x5hGqBfPUC                                                               
+## 132 766   all  766 American factory workers, farmers, consumers ones paying price President Trumpâ\200\231s reckless trade warsâ\200” China. To Trump, people getting hurtâ\200”like laid last week South Carolinaâ\200” just pawns political games. https://t.co/RRMvVsHrRT                                            
+## 133 767   all  767 The Trump Administration continues attack progress LGBTQ community made. As , passing Equality Act will top legislative priority, one fired simply love. https://t.co/X62KbDPTht                                                                                                      
+## 134 771   all  771 President Trump taking millions FEMA disaster relief midst hurricane season fuel crisis border. It makes much sense nuking hurricanes. https://t.co/sAmCB3SKO6                                                                                                                        
+## 135 774   all  774 Thank everyone came town hall Spartanburg, South Carolina! As I shared afternoon, need repeal President Trumpâ\200\231s tax cuts super-wealthy, make college affordable, rebuild Americaâ\200\231s middle class. https://t.co/Z1PWPThlTV                                                          
+## 136 782   all  782 Our military families sacrifice everything service nation. And today, Trump Administration revoked automatic citizenship children. It's reprehensible cruel. As , I'll reverse immediately. https://t.co/WgizSndgMF                                                                   
+## 137 785   all  785 There national security justification traumatizing sick kids vulnerable. Like bullies, Trump purposefully targeting little guysâ\200” I thought even understand kids cancer cystic fibrosis -limits.                                                                                     
+## 138 788   all  788 If give Donald Trump four years White House, planet may never recover. https://t.co/h2N0hn6k6L                                                                                                                                                                                        
+## 139 789   all  789 Grateful everyone attended town hall Clinton College. As I discussed morning, need stand President Trumpâ\200\231s constant attacks immigrants end inhumane policies. Weâ\200\231re stronger diversity â\200” spite . https://t.co/yo7IxNVI3K                                                        
+## 140 790   all  790 President Trump found newest target â\200” sick children. It's sinful. https://t.co/dgFT0vNbYC                                                                                                                                                                                           
+## 141 792   all  792 No hay justificaciÃ³n para traumatizar aÃºn mÃ¡s los niÃ±os enfermos en sus momentos mÃ¡s vulnerables. Como todo abusÃ³n, Trump estÃ¡ acosando los mÃ¡s dÃ©biles, pero atacar niÃ±os con cÃ¡ncer y fibrosis quÃ­stica es intolerable.                                                 
+## 142 794   all  794 This canâ\200\231t just campaign beat Donald Trump. This movement grounded values ideals define nation best: honesty, decency, treating everyone dignity respect, giving hate safe harbor. Thatâ\200\231s Americans.                                                                              
+## 143 795   all  795 Esta es solo una campaÃ± para vencer Donald Trump - es un movimiento basado en los valores que definen nuestra naciÃ³n: la honestidad, la decencia, y el tratar todos con dignidad y respeto, mientras le damos la espalda al odio. Eso es lo que somos como estadounidenses.         
+## 144 804   all  804 Like bullies, President Trump trying make seem stronger picking vulnerable among us â\200” I thought even understand kids cancer -limits. He morally unfit lead country. https://t.co/nmG7dEwr6Q                                                                                         
+## 145 805   all  805 On Thursday, 10-year-old Marcus asked important question President Trump. https://t.co/AJeUAXW5ST                                                                                                                                                                                     
+## 146 826   all  826 President Trump promised Mexico pay border wall. That never going happen. And now heâ\200\231s raiding billions military pay . https://t.co/9sBLAZysdB                                                                                                                                      
+## 147 838   all  838 President Trump continues : ðŸ”´ Deny science front eyes ðŸ”´ Attack progress made Obama-Biden Administration ðŸ”´ Spew lies like â\200œwindmills cause cancerâ\200\235 Defeating essential making progress climate change. #ClimateTownHall                                                   
+## 148 846   all  846 Two years ago, President Trump attempted end DACAâ\200”throwing lives chaos &amp;amp; forcing DREAMers live fear Supreme Court decides fate. It's cruel. DREAMers Americans. It's time Congress keep promise &amp;amp; provide path citizenship.                                                 
+## 149 847   all  847 Hace dos aÃ±os, el presidente Trump intentÃ³ terminar con DACA, obligando nuestros DREAMers vivir con miedo y caos. Es cruel. Los soÃ±adores son estadounidenses. Es hora de que el Congreso cumpla con nuestra promesa y les proporcione un camino hacia la ciudadanÃ­.              
+## 150 848   all  848 President Trump dead wrong climate change. Weâ\200\231ve got choose science fantasy treat like existential threat . As , I rally world take unprecedented action. There empty chair G-7. https://t.co/QvLCIM39oV                                                                            
+## 151 850   all  850 President Trump stokes flames hatred, coddles white nationalists messages support, preys deepest divisions. If give four years White House, will forever alter character nation. We canâ\200\231t let happen.                                                                               
+## 152 852   all  852 America stood beacon hope generations. Now, President Trump wants slam door face fleeing persecution. It's cruel damages global standing. I'll ensure meet responsibility nation world's vulnerable people. https://t.co/KjBkGlBPpu                                                   
+## 153 854   all  854 The Iran Deal put Iran's nuclear program box. Trump walked away deal, now Iran advancing program. This another reminder Trump's manufactured crisis making U.S., region, world less safe. https://t.co/KXD7Bdb5kU                                                                     
+## 154 856   all  856 President Trumpâ\200\231s immigration policies assault human dignity everything stand nation. We must end . https://t.co/otwGtLfHyM                                                                                                                                                         
+## 155 857   all  857 Las polÃ­ticas de inmigraciÃ³n del presidente Trump son un asalto la dignidad humana y todo lo que representamos como naciÃ³n. Por esto hay que acabar con ellas. https://t.co/otwGtLfHyM                                                                                             
+## 156 862   all  862 Obamacare prohibits insurers denying coverage 100 million Americans pre-existing conditions. President Trump wants gut ACA tear protection away. We canâ\200\231t forget .                                                                                                                  
+## 157 863   all  863 Everybody knows Donald Trump . We let know . We choose hope fear. Unity division. Science fiction. And truth lies. #NHDems2020 https://t.co/wClqhO5xO8                                                                                                                                
+## 158 866   all  866 Mexico isnâ\200\231t paying wall. American military families . China isnâ\200\231t paying tariffs. American farmers manufacturers . The American people continue foot bill President Trumpâ\200\231s senseless political games.                                                                         
+## 159 877   all  877 20 million people gained coverage Obamacare. But countless attacks law Trump Administration, uninsured rate increased first time since 2010 â\200” leaving additional 1.9 million people uninsured. As , I'll defend build ACA. https://t.co/qsbjQIDYhf                                  
+## 160 880   all  880 Puerto Rico still rebuilding devastation Hurricane Maria. Now, instead supporting recovery, President Trump defunding $400 million planned military projects Puerto Rico build wall. It's unacceptable.                                                                               
+## 161 881   all  881 Puerto Rico aÃºn se estÃ¡ recuperando de la devastaciÃ³n del huracÃ¡n MarÃ­. Ahora, en lugar de apoyar la reconstrucciÃ³n, Trump estÃ¡ desviando $400 millones de dÃ³lares para su construir su muro que estaban planificados para proyectos militares en Puerto Rico. Es inaceptable.
+## 162 882   all  882 Americaâ\200\231s strength always rooted diversity. Immigrants always made us stronger. Donald Trump doesnâ\200\231t get .                                                                                                                                                                        
+## 163 883   all  883 La fuerza de los Estados Unidos estÃ¡ y siempre ha estado arraigada en nuestra diversidad. Los inmigrantes siempre nos han hecho mÃ¡s fuertes. Donald Trump entiende eso.                                                                                                             
+## 164 889   all  889 The Trump Administration denying Temporary Protected Status Bahamians escaping devastation Hurricane Dorian. Itâ\200\231s heartless goes everything stand nation. The cruelty administration truly knows bounds. https://t.co/e56k78Rpda                                                    
+## 165 890   all  890 President Trumpâ\200\231s decision take billions military build wall unabashed abuse power. It endangers American people forfeits investments future, security, children â\200” score political points. https://t.co/CeQr87Oxcv                                                                
+## 166 900   all  900 Thereâ\200\231s enormous opportunity get rid Donald Trump. #DemDebate https://t.co/gkt6fq4Bvh                                                                                                                                                                                               
+## 167 904   all  904 Attempts compare President Trump President Obama immigration far-fetched. #DemDebate                                                                                                                                                                                                  
+## 168 927   all  927 At last nightâ\200\231s #DemDebate, I discussed vision country I'll deliver tangible progress pressing issues facing working families. I refuse postpone American possibilities longer. Thereâ\200\231s enormous opportunity get rid Donald Trump. https://t.co/eBmbdUEpYX                        
+## 169 952   all  952 Americaâ\200\231s farmers continue pay price President Trumpâ\200\231s reckless trade war. He thinks heâ\200\231s tough, itâ\200\231s easy act tough someone else feeling pain. As , Iâ\200\231ll stand China help working families. https://t.co/UHhCVLetKD                                                        
+## 170 955   all  955 Thank , South Carolina, great evening Galivants Ferry Stump. As I discussed last night, weâ\200\231ve got rebuild Americaâ\200\231s middle class. That starts repealing President Trumpâ\200\231s tax cuts super-wealthy rewarding work â\200” just wealth. https://t.co/ISrYut1BGO                        
+## 171 958   all  958 Our firefighters teachers paying higher tax rate someone making $50 million year. Weâ\200\231ve got repeal President Trumpâ\200\231s tax cuts super-wealthy create tax code works middle class.                                                                                                   
+## 172 966   all  966 Donald Trump continues relentless effort roll back hard-fought progress made Obama-Biden Administration. Higher auto emission standards make air breathe cleaner, keep us healthierâ\200” keep auto industry competitive global marketplace. https://t.co/G2scIizq53                     
+## 173 976   all  976 Our students deserve better four years Donald Trump Betsy DeVos.                                                                                                                                                                                                                      
+## 174 980   all  980 Two years ago, Hurricane Maria made landfall Puerto Rico â\200” devastating island killing thousands. At time fellow Americans needed help , President Trump failed . https://t.co/GXDDKmN3QV                                                                                            
+## 175 981   all  981 Hace dos aÃ±os, el huracÃ¡n MarÃ­ tocÃ³ tierra en Puerto Rico, devastando la isla y robando la vida de miles. En ese momento en que nuestros compatriotas necesitaron mÃ¡s ayuda, el presidente Trump les fallÃ³. https://t.co/wue61t3SdP                                             
+## 176 985   all  985 If reports true, truly bottom President Trumpâ\200\231s willingness abuse power abase country. https://t.co/PblNGDarXU                                                                                                                                                                      
+## 177 992   all  992 Eight. Thatâ\200\231s many times Donald Trump asked foreign leader investigate family. Why? Because knows I'll beat like drum. https://t.co/Oc303alcBi                                                                                                                                      
+## 178 996   all  996 Desperate Donald Trump knows I can beat , now heâ\200\231s enlisting help foreign government â\200” . Itâ\200\231s abuse power violates every basic norm presidency. We give four years White House. https://t.co/cqhkBUviAs https://t.co/vXmH3lTW6k
+```
+
+```
+## 
+## Match Terms
+## ===========
+```
+
+```
+## 
+## List 1:
+## trump, trumpâ€™s, trump's, trumpdoctrine, trumpâ€”, realdonaldtrumpâ€™s
+```
+
+```
+## 
+```
+
+```r
+# Add title
+title(main = "Trump in Biden Tweet Associations")
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-28-1.svg)&lt;!-- --&gt;
+
+---
+
+class: inverse, center, middle
+
+# 4. Sentiment Analysis
+
+---
+
+In this section we have analyzed polarity score:
+
+
+```r
+pos_score &lt;- polarity(biden_tweets)
+
+# Get counts
+pos_counts &lt;- counts(pos_score)
+pos_counts
+
+# Number of positive words
+n_good &lt;- length(pos_counts$pos.words[[1]]) 
+n_good
+
+# Total number of words
+n_words &lt;- pos_counts$wc
+
+# Verify polarity score
+n_good / sqrt(n_words)
+```
+
+---
+
+In this section we have used Qdap method for sentiment analysis:
+
+
+
+```r
+# Qdap polarity
+# biden_qdap_polarity &lt;- polarity(biden_tweets)
+# trump_qdap_polarity &lt;- polarity(trump_tweets)
+
+biden_tw_df_qdap &lt;- as.data.frame(biden_tweets)
+trump_tw_df_qdap &lt;- as.data.frame(trump_tweets)
+
+# Combine. Use bind_rows() to combine biden_qdap_polarity to trump_qdap_polarity. Set the .id argument to "Tweets" to create a new column with the name of each book.
+colnames(biden_tw_df_qdap) &lt;- c("Tweet Content")
+colnames(trump_tw_df_qdap) &lt;-  c("Tweet Content")
+ 
+
+all_df_qdap &lt;- bind_rows(biden = biden_tw_df_qdap, 
+                         trump = trump_tw_df_qdap,
+                         .id = "Candidate")
+
+# Calc overall polarity score
+# all_df_qdap %$% polarity(`Tweet Content`)
+
+# Calc polarity score by person. This will calculate polarity according to each individual person. Since it is all within parentheses the result will be printed too.
+# (polarity_qdap_canditates &lt;- all_df_qdap %$% polarity(`Tweet Content`, Candidate))
+
+# Counts table from polarity_qdap_canditates. Apply counts() to polarity_qdap_canditates to print the specific emotional words that were found.
+counts(polarity_qdap_canditates)
+```
+
+---
+
+
+```r
+# Plot the conversation polarity
+#plot(polarity_qdap_canditates)
+```
+
+---
+Next sentiment analysis is done using Afinn
+
+
+```r
+#Get Sentiment Lexicons
+afinn &lt;- get_sentiments("afinn")
+
+afinn %&gt;%
+	summarize(
+		min = min(value),
+		max = max(value)
+)
+
+afinn %&gt;% 
+  count(value)
+```
+
+---
+
+
+```r
+#Get Sentiment Lexicons
+afinn &lt;- get_sentiments("afinn")
+
+# Tidy up the DTM
+biden_tidy &lt;- tidy(biden_dtm)
+trump_tidy &lt;- tidy(trump_dtm)
+
+biden_afinn_words &lt;- inner_join(biden_tidy, afinn, by = c("term" = "word"))
+trump_afinn_words &lt;- inner_join(trump_tidy, afinn, by = c("term" = "word"))
+```
+
+---
+
+```r
+# Get counts by sentiment
+biden_afinn_words %&gt;%
+  count(value)
+```
+
+---
+
+```r
+# Get counts by sentiment
+trump_afinn_words %&gt;%
+  count(value)
+```
+---
+
+
+```r
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+biden_afinn_words &lt;- biden_afinn_words %&gt;%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+# Create biden_count_afinn by forwarding ag_afinn_words to count(), passing in value, index. Gives us value by twet
+biden_count_afinn &lt;- biden_afinn_words %&gt;%
+  # Count by value, index
+  count(value, index)
+# Generate biden_spread_afinn by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+biden_spread_afinn &lt;- biden_count_afinn %&gt;%
+  # Spread sentiments
+  spread(value, n, fill = 0)
+
+all_df_afinn &lt;- bind_rows(biden = biden_afinn_words, 
+                          trump = trump_afinn_words, 
+                          .id = "Tweets")
+```
+---
+
+
+```r
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+trump_afinn_words &lt;- trump_afinn_words %&gt;%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+# Create biden_count_afinn by forwarding ag_afinn_words to count(), passing in value, index. Gives us value by twet
+trump_count_afinn &lt;- trump_afinn_words %&gt;%
+  # Count by value, index
+  count(value, index)
+# Generate biden_spread_afinn by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+trump_spread_afinn &lt;- trump_count_afinn %&gt;%
+  # Spread sentiments
+  spread(value, n, fill = 0)
+```
+
+---
+This plot shows both candidates Afinn scores:
+
+
+```r
+# Plot value, filled by Tweets
+ggplot(all_df_afinn, aes(value, fill = Tweets)) + 
+  # Set the alpha transparency to 0.3.
+  geom_density(alpha = 0.3) + 
+  theme_gdocs() +
+  ggtitle("AFINN Score Densities")
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-38-1.svg)&lt;!-- --&gt;
+
+---
+
+We have made sentiment analysis using bing
+
+
+```r
+# Get Bing lexicon
+bing &lt;- get_sentiments("bing")
+
+biden_bing_words &lt;- inner_join(biden_tidy, bing, by = c("term" = "word"))
+
+# Get counts by sentiment
+biden_bing_words %&gt;%
+  count(sentiment)
+```
+
+```
+## # A tibble: 2 x 2
+##   sentiment     n
+##   &lt;chr&gt;     &lt;int&gt;
+## 1 negative   4042
+## 2 positive   7352
+```
+
+---
+
+
+
+```r
+# Create a column index, equal to as.numeric() applied to document. This occurs within mutate() in the tidyverse.
+biden_bing_words &lt;- biden_bing_words %&gt;%
+  # Set index to numeric document
+  mutate(index = as.numeric(document))
+  
+head(biden_bing_words,10)
+```
+
+```
+## # A tibble: 10 x 5
+##    document term       count sentiment index
+##    &lt;chr&gt;    &lt;chr&gt;      &lt;dbl&gt; &lt;chr&gt;     &lt;dbl&gt;
+##  1 3        optimistic     1 positive      3
+##  2 5        great          1 positive      5
+##  3 6        amazing        1 positive      6
+##  4 8        pleasure       1 positive      8
+##  5 8        thank          1 positive      8
+##  6 9        like           1 positive      9
+##  7 9        privilege      1 positive      9
+##  8 9        thank          1 positive      9
+##  9 10       thank          1 positive     10
+## 10 11       bigotry        1 negative     11
+```
+
+---
+
+
+
+```r
+# Create ag_count by forwarding ag_bing_words to count(), passing in sentiment, index.
+biden_count &lt;- biden_bing_words %&gt;%
+  # Count by sentiment, index
+  count(sentiment, index)
+
+
+# Generate moby_spread by piping ag_count to spread() which contains sentiment, n, and fill = 0.
+biden_spread &lt;- biden_count %&gt;%
+  # Spread sentiments
+  spread(sentiment, n, fill = 0)
+```
+
+---
+
+
+
+```r
+# exclude variables v1, v2, v3
+biden_polarity_plot &lt;- biden_bing_words %&gt;%
+                    select(term, count, index)
+
+str(biden_polarity_plot)
+```
+
+```
+## tibble [11,394 x 3] (S3: tbl_df/tbl/data.frame)
+##  $ term : chr [1:11394] "optimistic" "great" "amazing" "pleasure" ...
+##  $ count: num [1:11394] 1 1 1 1 1 1 1 1 1 1 ...
+##  $ index: num [1:11394] 3 5 6 8 8 9 9 9 10 11 ...
+```
+
+```r
+biden_polarity &lt;- biden_polarity_plot %&gt;%
+  # Inner join to lexicon
+  inner_join(bing, by = c("term" = "word")) %&gt;%
+  # Count the sentiment scores
+  count(sentiment, index) %&gt;% 
+  # Spread the sentiment into positive and negative columns
+  spread(sentiment, n, fill = 0) %&gt;%
+  # Add polarity column
+  mutate(polarity = positive - negative)
+```
+
+---
+
+
+
+```r
+biden_polarity
+```
+
+```
+## # A tibble: 4,010 x 4
+##    index negative positive polarity
+##    &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;    &lt;dbl&gt;
+##  1     3        0        1        1
+##  2     5        0        1        1
+##  3     6        0        1        1
+##  4     8        0        2        2
+##  5     9        0        3        3
+##  6    10        0        1        1
+##  7    11        3        0       -3
+##  8    12        0        5        5
+##  9    13        1        3        2
+## 10    16        1        1        0
+## # ... with 4,000 more rows
+```
+
+---
+
+
+
+```r
+# Plot polarity vs. index
+ggplot(biden_polarity, aes(x = index, y = polarity)) + 
+  # Add a smooth trend curve
+  geom_smooth()
+```
+
+```
+## `geom_smooth()` using method = 'gam' and formula 'y ~ s(x, bs = "cs")'
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-44-1.svg)&lt;!-- --&gt;
+
+
+
+---
+
+class: inverse, center, middle
+
+# 5. Topic Modelling
+
+---
+
+In the last section, we have created topic model for Biden tweets:
+
+
+
+```r
+biden_tidy1 &lt;- biden_tidy %&gt;%
+  filter(!term %in% c("the", "get", "just", "can", "don't", "stil", "it's", "its", "this", "and", "'re", "I'm", "many", "i'm","'re ", " 're", "cant", "can't", "i'm ", "i'll", "can't", "it's ", "but", "let"))
+
+# Start with the tidied Twitter data
+biden_tidy_dtm &lt;- biden_tidy1 %&gt;% 
+  # Count each word used in each tweet
+  count(term, document) %&gt;%
+  # Use the word counts by tweet to create a DTM
+  cast_sparse(document, term, n)
+
+# Coerce dtm_twitter into a matrix called matrix_twitter
+matrix_biden_topic &lt;- as.matrix(biden_tidy_dtm)
+```
+
+---
+
+
+```r
+# Run an LDA with 2 topics and a Gibbs sampler
+lda_out_biden5 &lt;- LDA(
+	biden_tidy_dtm, 
+	k = 5,
+	method = "Gibbs",
+	control = list(seed = 1200)
+)
+
+
+# Tidy the matrix of word probabilities
+lda_topics_biden5 &lt;- lda_out_biden5 %&gt;%
+tidy(matrix = "beta")
+
+# Arrange the topics by word probabilities in descending order___ %&gt;% 
+lda_topics_biden5 %&gt;%
+    arrange(desc(beta))
+```
+
+```
+## # A tibble: 59,655 x 3
+##    topic term        beta
+##    &lt;int&gt; &lt;chr&gt;      &lt;dbl&gt;
+##  1     2 trump     0.0604
+##  2     2 president 0.0598
+##  3     2 donald    0.0430
+##  4     5 will      0.0327
+##  5     5 â€”       0.0326
+##  6     1 nation    0.0267
+##  7     5 one       0.0245
+##  8     2 american  0.0244
+##  9     3 today     0.0227
+## 10     3 make      0.0226
+## # ... with 59,645 more rows
+```
+
+```r
+biden_documents &lt;- tidy(lda_out_biden5, matrix = "gamma") %&gt;% arrange(desc(gamma))
+```
+
+---
+
+
+```r
+# Select the top 15 terms by topic and reorder term
+word_probs_biden5 &lt;- lda_topics_biden5 %&gt;%
+    group_by(topic) %&gt;%
+    top_n(20, beta) %&gt;%
+    ungroup() %&gt;%
+    mutate(term5 = fct_reorder(term, beta))
+
+word_probs_biden5$topic &lt;- factor(word_probs_biden5$topic, levels = c("1", "2", "3", "4", "5"), labels = c("Nation", "Trump Presidency", "Campain and Election", "Health Care", "Biden Presidency"))
+```
+
+---
+
+
+```r
+ggplot(
+  word_probs_biden5, 
+  aes(term5, beta, fill = as.factor(topic))
+) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+![](trump_biden_presentation_files/figure-html/unnamed-chunk-48-1.svg)&lt;!-- --&gt;
+ 
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
